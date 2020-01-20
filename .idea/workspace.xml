@@ -2,6 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="52dfc206-5c55-48cc-ad12-9c267f49e6b4" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -33,6 +35,7 @@
   </component>
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$/../Jediverse" />
   </component>
   <component name="RunManager" selected="Application.Main">
@@ -92,9 +95,25 @@
       <option name="presentableId" value="Default" />
       <updated>1579521010276</updated>
     </task>
+    <task id="LOCAL-00001" summary="Update README">
+      <created>1579537067972</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1579537067972</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Update README" />
+    <option name="LAST_COMMIT_MESSAGE" value="Update README" />
+  </component>
   <component name="WindowStateProjectService">
+    <state x="2486" y="686" width="779" height="814" key="CommitChangelistDialog2" timestamp="1579537067828">
+      <screen x="0" y="28" width="3840" height="2132" />
+    </state>
+    <state x="2486" y="686" width="779" height="814" key="CommitChangelistDialog2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537067828" />
     <state x="2663" y="852" width="426" height="482" key="FileChooserDialogImpl" timestamp="1579521162387">
       <screen x="0" y="28" width="3840" height="2132" />
     </state>
@@ -115,10 +134,10 @@
       <screen x="0" y="28" width="3840" height="2132" />
     </state>
     <state width="1872" height="634" key="GridCell.Tab.0.right/0.28.3840.2132@0.28.3840.2132" timestamp="1579535478050" />
-    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2" timestamp="1579537060698">
+    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2" timestamp="1579537071880">
       <screen x="0" y="28" width="3840" height="2132" />
     </state>
-    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537060698" />
+    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537071880" />
     <state x="2531" y="690" width="697" height="807" key="find.popup" timestamp="1579531028471">
       <screen x="0" y="28" width="3840" height="2132" />
     </state>
