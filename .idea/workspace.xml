@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="52dfc206-5c55-48cc-ad12-9c267f49e6b4" name="Default Changelist" comment="" />
+    <list default="true" id="52dfc206-5c55-48cc-ad12-9c267f49e6b4" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -19,7 +21,11 @@
       </list>
     </option>
   </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
   <component name="ProjectId" id="1WergHloAJJEIeIByRbo7TxiW29" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showExcludedFiles" value="true" />
@@ -109,6 +115,10 @@
       <screen x="0" y="28" width="3840" height="2132" />
     </state>
     <state width="1872" height="634" key="GridCell.Tab.0.right/0.28.3840.2132@0.28.3840.2132" timestamp="1579535478050" />
+    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2" timestamp="1579537060698">
+      <screen x="0" y="28" width="3840" height="2132" />
+    </state>
+    <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537060698" />
     <state x="2531" y="690" width="697" height="807" key="find.popup" timestamp="1579531028471">
       <screen x="0" y="28" width="3840" height="2132" />
     </state>

@@ -1,2 +1,2 @@
-# @bot@pla.social
-Fediverse bot written in Java. 
+# Fediverse bot written in Java. 
+@bot@pla.social
