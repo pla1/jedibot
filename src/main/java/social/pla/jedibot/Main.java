@@ -21,15 +21,15 @@ import java.util.logging.SimpleFormatter;
 
 public class Main {
     private static BufferedReader console;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    private JsonObject settings;
+    public final String BLANK = "";
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private boolean debug = true;
     private Logger logger;
     private File jsonLoggerFile;
     private WebSocket webSocket;
     private int sleepInterval = 30;
-    private final String BLANK = "";
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final HprDAO hprDAO = new HprDAO();
+    private final NasaDAO nasaDAO = new NasaDAO();
 
     public Main() {
         setup();
@@ -42,14 +42,6 @@ public class Main {
         System.exit(0);
     }
 
-    class WorkerNasaPictureOfDay extends Thread {
-
-        @Override
-        public void run() {
-            System.out.format("%s running at %s\n", this.getClass().getCanonicalName(), new Date());
-        }
-    }
-
     public static void main(String[] args) {
         System.out.format("%s\n", new Date());
         new Main();
@@ -58,18 +50,19 @@ public class Main {
     private void setup() {
         console = new BufferedReader(new InputStreamReader(System.in));
         logger = getLogger();
-        settings = Utils.getSettings();
+        JsonObject settings = Utils.getSettings();
         while (settings == null) {
             createApp();
             settings = Utils.getSettings();
         }
         System.out.format("Using instance: %s as %s\n", settings.get(Literals.instance.name()), whoami());
-        WorkerNasaPictureOfDay worker = new WorkerNasaPictureOfDay();
-        ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker,  0,60, TimeUnit.SECONDS);
+        WorkerRssFeeds worker = new WorkerRssFeeds();
+        ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker, 0, 1, TimeUnit.MINUTES);
     }
 
     private void setupWebsocket() {
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        JsonObject settings = Utils.getSettings();
         String urlString = String.format("wss://%s/api/v1/streaming/?stream=user&access_token=%s",
                 Utils.getProperty(settings, Literals.instance.name()), Utils.getProperty(settings, Literals.access_token.name()));
         WebSocketListener webSocketListener = new WebSocketListener("user");
@@ -132,13 +125,14 @@ public class Main {
         jsonObject.addProperty(Literals.created_at.name(), Utils.getProperty(outputJsonObject, Literals.created_at.name()));
         jsonObject.addProperty(Literals.instance.name(), instance);
         jsonObject.addProperty(Literals.milliseconds.name(), System.currentTimeMillis());
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
         String pretty = gson.toJson(jsonObject);
         Utils.write(Utils.getSettingsFileName(), pretty);
-        settings = jsonObject;
         System.out.format("Added. You are now %s\n", whoami());
     }
 
     private String whoami() {
+        JsonObject settings = Utils.getSettings();
         String urlString = String.format("https://%s/api/v1/accounts/verify_credentials", Utils.getProperty(settings, Literals.instance.name()));
         JsonElement jsonElement = getJsonElement(urlString);
         return String.format("%s %s", Utils.getProperty(jsonElement, Literals.username.name()), Utils.getProperty(jsonElement, Literals.url.name()));
@@ -151,12 +145,14 @@ public class Main {
     private JsonElement getJsonElement(String urlString, boolean ignoreExceptions) {
         URL url = Utils.getUrl(urlString);
         HttpsURLConnection urlConnection;
+        JsonObject settings = Utils.getSettings();
         try {
             urlConnection = (HttpsURLConnection) url.openConnection();
             String authorization = String.format("Bearer %s", settings.get(Literals.access_token.name()).getAsString());
             urlConnection.setRequestProperty("Authorization", authorization);
             InputStream is = urlConnection.getInputStream();
             InputStreamReader isr = new InputStreamReader(is);
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
             return gson.fromJson(isr, JsonElement.class);
         } catch (IOException e) {
             if (!ignoreExceptions) {
@@ -203,6 +199,7 @@ public class Main {
         InputStream inputStream = null;
         OutputStream outputStream = null;
         JsonObject jsonObject = null;
+        JsonObject settings = Utils.getSettings();
         try {
             urlConnection = (HttpsURLConnection) url.openConnection();
             urlConnection.setRequestProperty("Cache-Control", "no-cache");
@@ -210,11 +207,8 @@ public class Main {
             urlConnection.setRequestProperty("User-Agent", "Jediverse CLI");
             urlConnection.setUseCaches(false);
             urlConnection.setRequestMethod(Literals.POST.name());
-            if (settings != null) {
-                String authorization = String.format("Bearer %s", Utils.getProperty(settings, Literals.access_token.name()));
-                urlConnection.setRequestProperty("Authorization", authorization);
-                //         System.out.format("Setting authorization header: %s\n", authorization);
-            }
+            String authorization = String.format("Bearer %s", Utils.getProperty(settings, Literals.access_token.name()));
+            urlConnection.setRequestProperty("Authorization", authorization);
             if (json != null) {
                 urlConnection.setRequestProperty("Content-type", "application/json; charset=UTF-8");
                 urlConnection.setDoOutput(true);
@@ -228,28 +222,15 @@ public class Main {
             urlConnection.setInstanceFollowRedirects(true);
             inputStream = urlConnection.getInputStream();
             InputStreamReader isr = new InputStreamReader(inputStream);
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
             jsonObject = gson.fromJson(isr, JsonObject.class);
         } catch (Exception e) {
             e.printStackTrace();
+            return new JsonObject();
         } finally {
             Utils.close(inputStream, outputStream);
         }
         return jsonObject;
-    }
-
-    public enum Literals {
-        audioFileNotifications, audioFileFails, id, instance, me, milliseconds, quantity,
-        browserCommand, client_name, scopes, website, grant_type, access_token, refresh_token,
-        redirect_uri, redirect_uris, client_id, client_secret, code, expires_in, created_at, content, type, status,
-        none, search, clear, about, blocks, context, debug, ok, url, go, notification, event, payload, acct, display_name,
-        properties, local, notifications, timeline, note, tl, following, followers, lists, gc, stop, home, post, POST, DELETE, unlisted,
-        follow, reblog, favourite, mention, direct, fav, reply, rep, help, quit, exit, whoami, unfav, account_ids, username,
-        visibility, upload, unfollow, title, media_ids, file, description, authorization_code, followed_by, history, day, uses, name,
-        ancestors, descendants, account, accounts, hashtags, statuses, media_attachments, aa, sa, da, user_count, status_count,
-        domain_count, stats, registrations, version, protocols, staffAccounts, metadata, postFormats, quarantined_instances, mrf_policies, mrf_simple,
-        federation, reject, report_removal, media_removal, federated_timeline_removal, banner_removal, avatar_removal, accept,
-        media_nsfw, onstart, date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
-        hprLatestEpisode, hprEpisodeUpload
     }
 
     private String clean(String text) {
@@ -278,6 +259,7 @@ public class Main {
         if (Utils.isBlank(text)) {
             System.out.format("Text not found in message %s\n", jsonElement);
         }
+        JsonObject settings = Utils.getSettings();
         String visibility = Utils.getProperty(statusJe, Literals.visibility.name());
         String output = null;
         if (Literals.help.name().equalsIgnoreCase(text)) {
@@ -324,6 +306,7 @@ public class Main {
 
     private void postStatus(String text, String inReplyToId, String visibility, ArrayList<JsonElement> mediaArrayList) {
         System.out.format("Post in reply to: %s\n", inReplyToId);
+        JsonObject settings = Utils.getSettings();
         String urlString = String.format("https://%s/api/v1/statuses", Utils.getProperty(settings, Literals.instance.name()));
         JsonObject params = new JsonObject();
         params.addProperty(Literals.status.name(), text);
@@ -342,9 +325,90 @@ public class Main {
         System.out.format("Status posted: %s\n", jsonObject);
     }
 
+    public enum Literals {
+        id, instance, me, milliseconds, client_name, scopes, website, grant_type, access_token, refresh_token,
+        redirect_uri, redirect_uris, client_id, client_secret, code, expires_in, created_at, content, type, status,
+        url, notification, event, payload, acct, POST, mention, help, quit, username,
+        visibility, title, media_ids, file, description, authorization_code, account,
+        date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
+        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated
+    }
+
+    class WorkerRssFeeds extends Thread {
+        private void nasa() {
+            JsonObject settings = Utils.getSettings();
+            JsonObject nasaImageOfTheDaySettings = settings.getAsJsonObject(Literals.nasaImageOfTheDay.name());
+            JsonObject nasaImageOfTheDay = nasaDAO.getLatestImageOfTheDay();
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            if (nasaImageOfTheDay == null || Utils.isBlank(Utils.getProperty(nasaImageOfTheDay, Literals.title.name()))) {
+                System.out.format("Something went wrong while retrieving the latest NASA Image of the day. %s\n", nasaImageOfTheDay);
+                return;
+            }
+            if (nasaImageOfTheDaySettings == null) {
+                System.out.format("NASA IOD from settings not found. Adding:\n%s\n", gson.toJson(nasaImageOfTheDay));
+                nasaUploadMedia(settings, nasaImageOfTheDay);
+            } else {
+                String title = Utils.getProperty(nasaImageOfTheDay, Literals.title.name());
+                String titleFromSettings = Utils.getProperty(nasaImageOfTheDaySettings, Literals.title.name());
+                if (!title.equals(titleFromSettings)) {
+                    System.out.format("NASA IOD title changed from: %s to %s\n", titleFromSettings, title);
+                    nasaUploadMedia(settings, nasaImageOfTheDay);
+                } else {
+                    System.out.format("NASA IOD title has not changed. %s", title);
+                }
+            }
+        }
+        private void nasaUploadMedia(JsonObject settings, JsonObject nasaImageOfTheDay) {
+            settings.add(Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
+            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
+            File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
+            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
+            nasaImageOfTheDay.add(Literals.nasaImageUpload.name(), uploadedJo);
+            Utils.writeSettings(settings);
+        }
+        private void hpr() {
+            JsonObject settings = Utils.getSettings();
+            JsonObject hprLatestEpisodeFromSettings = settings.getAsJsonObject(Literals.hprLatestEpisode.name());
+            JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            if (hprLatestEpisode == null || Utils.isBlank(Utils.getProperty(hprLatestEpisode, Literals.title.name()))) {
+                System.out.format("Something went wrong while retrieving the latest HPR episode. %s\n", hprLatestEpisode);
+                return;
+            }
+            if (hprLatestEpisodeFromSettings == null) {
+                System.out.format("HPR latest episode from settings not found. Adding:\n%s\n", gson.toJson(hprLatestEpisode));
+                hprUploadMedia(settings, hprLatestEpisode);
+            } else {
+                String title = Utils.getProperty(hprLatestEpisode, Literals.title.name());
+                String titleFromSettings = Utils.getProperty(hprLatestEpisodeFromSettings, Literals.title.name());
+                if (!title.equals(titleFromSettings)) {
+                    System.out.format("HPR title changed from: %s to %s\n", titleFromSettings, title);
+                    hprUploadMedia(settings, hprLatestEpisode);
+                } else {
+                    System.out.format("HPR episode title has not changed. %s", title);
+                }
+            }
+        }
+
+        private void hprUploadMedia(JsonObject settings, JsonObject hprLatestEpisode) {
+            settings.add(Literals.hprLatestEpisode.name(), hprLatestEpisode);
+            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
+            File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
+            JsonObject uploadedJo = Utils.uploadMedia(audioFile);
+            hprLatestEpisode.add(Literals.hprEpisodeUpload.name(), uploadedJo);
+            Utils.writeSettings(settings);
+        }
+
+        @Override
+        public void run() {
+            System.out.format("%s running at %s\n", this.getClass().getCanonicalName(), new Date());
+            hpr();
+            nasa();
+        }
+    }
+
     private class WebSocketListener implements WebSocket.Listener {
         private final String stream;
-        private final JsonParser jsonParser = new JsonParser();
         private StringBuilder sb = new StringBuilder();
 
         WebSocketListener(String stream) {
@@ -355,7 +419,8 @@ public class Main {
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             if (last) {
                 sb.append(data);
-                JsonElement messageJsonElement = jsonParser.parse(sb.toString());
+                JsonElement messageJsonElement = JsonParser.parseString(sb.toString());
+                Gson gson = new GsonBuilder().setPrettyPrinting().create();
                 logger.info(gson.toJson(messageJsonElement));
                 if (Utils.isJsonObject(messageJsonElement)) {
                     String event = Utils.getProperty(messageJsonElement, Literals.event.name());

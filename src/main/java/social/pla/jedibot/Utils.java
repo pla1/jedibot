@@ -5,7 +5,6 @@ import com.google.gson.*;
 import javax.imageio.ImageIO;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.Clip;
-import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.math.BigInteger;
@@ -13,15 +12,12 @@ import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -34,10 +30,11 @@ public class Utils {
     public static final String SYMBOL_THINKING = "\uD83E\uDD14";
     public static final String SYMBOL_THUMBSUP = "\uD83D\uDC4D";
     public static final String SYMBOL_THUMBSDOWN = "\uD83D\uDC4E";
-    private final static Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
 
     public static void main(String[] args) throws Exception {
         JsonObject settings = getSettings();
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
         if (false) {
             String urlString = "http://hackerpublicradio.org/eps/hpr2991.ogg";
             URL url = new URL(urlString);
@@ -62,7 +59,7 @@ public class Utils {
             File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
             System.out.format("%s\n", imageFile.getAbsolutePath());
             JsonObject nasaImageOfTheDay = nasaDAO.getLatestImageOfTheDay();
-            JsonObject uploadedJo = Utils.uploadImage(imageFile);
+            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
             ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
             mediaArrayList.add(uploadedJo);
             nasaImageOfTheDay.add(Main.Literals.nasaImageUpload.name(), uploadedJo);
@@ -75,7 +72,7 @@ public class Utils {
             settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
             File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
             System.out.format("%s\n", audioFile.getAbsolutePath());
-            JsonObject uploadedJo = Utils.uploadImage(audioFile);
+            JsonObject uploadedJo = Utils.uploadMedia(audioFile);
             ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
             mediaArrayList.add(uploadedJo);
             hprLatestEpisode.add(Main.Literals.hprEpisodeUpload.name(), uploadedJo);
@@ -131,7 +128,8 @@ public class Utils {
         }
         return new URL(location);
     }
-    public static String readFileToString(String  fileName) {
+
+    public static String readFileToString(String fileName) {
         BufferedReader bufferedReader = null;
         try {
             bufferedReader = new BufferedReader(new FileReader(fileName));
@@ -142,15 +140,15 @@ public class Utils {
                 sb.append(System.lineSeparator());
                 line = bufferedReader.readLine();
             }
-            return  sb.toString();
+            return sb.toString();
         } catch (Exception e) {
             e.printStackTrace();
-        }
-        finally {
+        } finally {
             close(bufferedReader);
         }
         return "";
     }
+
     public static File downloadAudio(String urlString) {
         OutputStream outputStream = null;
         try {
@@ -202,7 +200,7 @@ public class Utils {
         return humanReadableByteCount(bytes, true);
     }
 
-    private static JsonObject uploadImage(File file) throws Exception {
+    public static JsonObject uploadMedia(File file) {
         JsonObject settings = getSettings();
         String urlString = String.format("https://%s/api/v1/media", Utils.getProperty(settings, Main.Literals.instance.name()));
         System.out.format("Upload image %s\n", urlString);
@@ -216,13 +214,20 @@ public class Utils {
         data.put(Main.Literals.description.name(), String.format("%s uploaded by JediBot.", file.getAbsolutePath()));
         data.put(Main.Literals.file.name(), Paths.get(file.getAbsolutePath()));
         String boundary = new BigInteger(256, new Random()).toString();
-        HttpRequest request = HttpRequest.newBuilder()
-                .header("Content-Type", "multipart/form-data;boundary=" + boundary)
-                .POST(ofMimeMultipartData(data, boundary))
-                .uri(URI.create(urlString))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        //   System.out.format("%s\n", response.body());
+        HttpRequest request = null;
+        HttpResponse<String> response = null;
+        try {
+            request = HttpRequest.newBuilder()
+                    .header("Content-Type", "multipart/form-data;boundary=" + boundary)
+                    .POST(ofMimeMultipartData(data, boundary))
+                    .uri(URI.create(urlString))
+                    .build();
+
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
         int responseStatusCode = response.statusCode();
         if (responseStatusCode == 413) {
             System.out.format("File %s is too large. Size is %s.\n", file.getAbsolutePath(), Utils.humanReadableByteCount(file.length()));
@@ -271,6 +276,7 @@ public class Utils {
         try {
             fis = new FileInputStream(propertyFile);
             InputStreamReader isr = new InputStreamReader(fis);
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
             return gson.fromJson(isr, JsonObject.class);
         } catch (Exception e) {
             e.printStackTrace();
@@ -285,6 +291,11 @@ public class Utils {
             if (object != null) {
                 try {
                     boolean closed = false;
+                    if (object instanceof RandomAccessFile) {
+                        RandomAccessFile randomAccessFile = (RandomAccessFile) object;
+                        randomAccessFile.close();
+                        closed = true;
+                    }
                     if (object instanceof AudioInputStream) {
                         AudioInputStream audioInputStream = (AudioInputStream) object;
                         audioInputStream.close();
@@ -425,25 +436,43 @@ public class Utils {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
+    public static boolean writeSettings(JsonObject settings) {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        return Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
+    }
+
     public static boolean write(String outputFileName, String text) {
+        File file = new File(outputFileName);
+        FileOutputStream fileOutputStream = null;
         try {
-            RandomAccessFile outputFile = new RandomAccessFile(outputFileName, "rw");
-            FileChannel fileChannel = outputFile.getChannel();
+            fileOutputStream = new FileOutputStream(file);
+            FileChannel fileChannel = fileOutputStream.getChannel();
             FileLock fileLock = fileChannel.lock();
-            System.out.format("%s lock valid: %s lock shared: %s\n", outputFileName, fileLock.isValid(), fileLock.isShared());
-            ByteBuffer buffer = null;
-            if (fileLock != null) {
-                buffer = ByteBuffer.wrap(text.getBytes());
-                buffer.put(text.getBytes());
-                buffer.flip();
-                while (buffer.hasRemaining()) {
-                    fileChannel.write(buffer);
-                }
-                close(fileChannel);
-                return true;
-            }
+            fileOutputStream.write(text.getBytes());
+            fileOutputStream.flush();
+            fileLock.release();
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+            return false;
+        } finally {
+            close(fileOutputStream);
+        }
+    }
+
+    public static boolean write20200121(String outputFileName, String text) {
+        RandomAccessFile outputFile = null;
+        FileChannel fileChannel = null;
+        try {
+            outputFile = new RandomAccessFile(outputFileName, "rw");
+            fileChannel = outputFile.getChannel();
+            FileLock fileLock = fileChannel.lock();
+            System.out.format("%s lock valid: %s lock shared: %s\n", outputFileName, fileLock.isValid(), fileLock.isShared());
+            outputFile.write(text.getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            close(fileChannel, outputFile);
         }
         return false;
     }
