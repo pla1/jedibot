@@ -1,0 +1,19 @@
+Commands
+
+hpr
+
+nasa
+
+date
+
+ping 8.8.8.8
+
+help
+
+hpr - Get the latest Hacker Public Radio episode
+
+nasa - Get NASA's latest Image of the Day
+
+date - Get the date in the Eastern time zone
+
+ping - PING an ip address or host name

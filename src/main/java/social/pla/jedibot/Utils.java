@@ -131,7 +131,26 @@ public class Utils {
         }
         return new URL(location);
     }
-
+    public static String readFileToString(String  fileName) {
+        BufferedReader bufferedReader = null;
+        try {
+            bufferedReader = new BufferedReader(new FileReader(fileName));
+            StringBuilder sb = new StringBuilder();
+            String line = bufferedReader.readLine();
+            while (line != null) {
+                sb.append(line);
+                sb.append(System.lineSeparator());
+                line = bufferedReader.readLine();
+            }
+            return  sb.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        finally {
+            close(bufferedReader);
+        }
+        return "";
+    }
     public static File downloadAudio(String urlString) {
         OutputStream outputStream = null;
         try {

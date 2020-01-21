@@ -286,6 +286,9 @@ public class Main {
         if (Literals.date.name().equalsIgnoreCase(text)) {
             output = String.format("%s", new Date());
         }
+        if (Literals.help.name().equalsIgnoreCase(text)) {
+            output = Utils.readFileToString("help.txt");
+        }
         if (Literals.nasa.name().equalsIgnoreCase(text)) {
             JsonObject nasaImageOfTheDay = settings.get(Literals.nasaImageOfTheDay.name()).getAsJsonObject();
             JsonObject uploadedImage = nasaImageOfTheDay.get(Literals.nasaImageUpload.name()).getAsJsonObject();
