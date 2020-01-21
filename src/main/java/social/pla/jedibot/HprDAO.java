@@ -1,5 +1,7 @@
 package social.pla.jedibot;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import org.jsoup.Jsoup;
 import org.jsoup.parser.Parser;
@@ -12,7 +14,8 @@ public class HprDAO {
     public static void main(String[] args) throws Exception {
         HprDAO dao = new HprDAO();
         JsonObject jsonObject = dao.getLatestEpisode();
-        System.out.format("%s\n", jsonObject);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        System.out.format("%s\n", gson.toJson(jsonObject));
     }
 
     public JsonObject getLatestEpisode() throws IOException {
@@ -24,7 +27,10 @@ public class HprDAO {
         for (org.jsoup.nodes.Element e : document.getElementsByTag("item")) {
             for (org.jsoup.nodes.Element child : e.getAllElements()) {
                 String nodeName = child.nodeName();
-                String text = child.text();
+                String html = child.html();
+                html = html.replace("<![CDATA[", "");
+                html = html.replace("]]>","");
+                String text = Jsoup.parse(html).text();
                 if (Main.Literals.title.name().equals(nodeName)
                         || Main.Literals.link.name().equals(nodeName)
                         || Main.Literals.description.name().equals(nodeName)

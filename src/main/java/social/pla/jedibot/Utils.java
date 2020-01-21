@@ -69,7 +69,7 @@ public class Utils {
             settings.add(Main.Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
             Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
         }
-        if (false) {
+        if (true) {
             HprDAO hprDAO = new HprDAO();
             JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
             settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
