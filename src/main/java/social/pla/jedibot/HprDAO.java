@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
 
 import java.io.IOException;
@@ -30,11 +32,11 @@ public class HprDAO {
     public JsonObject getLatestEpisode() {
         JsonObject jsonObject = new JsonObject();
         try {
-            org.jsoup.nodes.Document document = Jsoup.connect(URL_FEED_HPR)
+            Document document = Jsoup.connect(URL_FEED_HPR)
                     .parser(Parser.xmlParser())
                     .timeout(1000 * 3)
                     .get();
-            for (org.jsoup.nodes.Element e : document.getElementsByTag("item")) {
+            for (Element e : document.getElementsByTag("item")) {
                 for (org.jsoup.nodes.Element child : e.getAllElements()) {
                     String nodeName = child.nodeName();
                     String html = child.html();
