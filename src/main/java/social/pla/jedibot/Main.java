@@ -11,8 +11,9 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.concurrent.CompletionStage;
+import java.util.concurrent.*;
 import java.util.logging.FileHandler;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
@@ -28,6 +29,7 @@ public class Main {
     private WebSocket webSocket;
     private int sleepInterval = 30;
     private final String BLANK = "";
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     public Main() {
         setup();
@@ -38,6 +40,14 @@ public class Main {
         }
         System.out.format("Web socket died at %s.\n", new Date());
         System.exit(0);
+    }
+
+    class WorkerNasaPictureOfDay extends Thread {
+
+        @Override
+        public void run() {
+            System.out.format("%s running at %s\n", this.getClass().getCanonicalName(), new Date());
+        }
     }
 
     public static void main(String[] args) {
@@ -54,6 +64,8 @@ public class Main {
             settings = Utils.getSettings();
         }
         System.out.format("Using instance: %s as %s\n", settings.get(Literals.instance.name()), whoami());
+        WorkerNasaPictureOfDay worker = new WorkerNasaPictureOfDay();
+        ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker,  0,60, TimeUnit.SECONDS);
     }
 
     private void setupWebsocket() {
@@ -62,7 +74,6 @@ public class Main {
                 Utils.getProperty(settings, Literals.instance.name()), Utils.getProperty(settings, Literals.access_token.name()));
         WebSocketListener webSocketListener = new WebSocketListener("user");
         webSocket = client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5)).buildAsync(URI.create(urlString), webSocketListener).join();
-
     }
 
     private String ask(String prompt) {
@@ -226,7 +237,7 @@ public class Main {
         return jsonObject;
     }
 
-    private enum Literals {
+    public enum Literals {
         audioFileNotifications, audioFileFails, id, instance, me, milliseconds, quantity,
         browserCommand, client_name, scopes, website, grant_type, access_token, refresh_token,
         redirect_uri, redirect_uris, client_id, client_secret, code, expires_in, created_at, content, type, status,
@@ -237,7 +248,8 @@ public class Main {
         ancestors, descendants, account, accounts, hashtags, statuses, media_attachments, aa, sa, da, user_count, status_count,
         domain_count, stats, registrations, version, protocols, staffAccounts, metadata, postFormats, quarantined_instances, mrf_policies, mrf_simple,
         federation, reject, report_removal, media_removal, federated_timeline_removal, banner_removal, avatar_removal, accept,
-        media_nsfw, onstart, date, pla, ping
+        media_nsfw, onstart, date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
+        hprLatestEpisode, hprEpisodeUpload
     }
 
     private String clean(String text) {
@@ -262,6 +274,7 @@ public class Main {
         String text = getText(statusJe);
         System.out.format("Handling message: \"%s\".\n", text);
         text = clean(text);
+        ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
         if (Utils.isBlank(text)) {
             System.out.format("Text not found in message %s\n", jsonElement);
         }
@@ -273,6 +286,24 @@ public class Main {
         if (Literals.date.name().equalsIgnoreCase(text)) {
             output = String.format("%s", new Date());
         }
+        if (Literals.nasa.name().equalsIgnoreCase(text)) {
+            JsonObject nasaImageOfTheDay = settings.get(Literals.nasaImageOfTheDay.name()).getAsJsonObject();
+            JsonObject uploadedImage = nasaImageOfTheDay.get(Literals.nasaImageUpload.name()).getAsJsonObject();
+            mediaArrayList.add(uploadedImage);
+            output = String.format("%s\n\n%s\n\n%s",
+                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.title.name()),
+                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.description.name()),
+                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.link.name()));
+        }
+        if (Literals.hpr.name().equalsIgnoreCase(text)) {
+            JsonObject hprLatestEpisode = settings.get(Literals.hprLatestEpisode.name()).getAsJsonObject();
+            JsonObject uploadedAudio = hprLatestEpisode.get(Literals.hprEpisodeUpload.name()).getAsJsonObject();
+            mediaArrayList.add(uploadedAudio);
+            output = String.format("%s\n\n%s\n\n%s",
+                    Utils.getProperty(hprLatestEpisode, Main.Literals.title.name()),
+                    Utils.getProperty(hprLatestEpisode, Main.Literals.description.name()),
+                    Utils.getProperty(hprLatestEpisode, Main.Literals.link.name()));
+        }
         if (text.equalsIgnoreCase(Literals.quit.name())
                 && Literals.pla.name().equalsIgnoreCase(accountName)) {
             System.out.format("Received quit request from PLA. %s\n", new Date());
@@ -280,24 +311,32 @@ public class Main {
         }
         String[] words = text.split("\\s+");
         if (words.length == 2 && Literals.ping.name().equalsIgnoreCase(words[0])) {
-           output = Utils.ping(words[1]);
+            output = Utils.ping(words[1]);
         }
         if (Utils.isBlank(output)) {
             output = String.format("Don't know how to respond to \"%s\". %s", text, Utils.SYMBOL_THINKING);
         }
-        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), visibility);
+        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), visibility, mediaArrayList);
     }
 
-    private void postStatus(String text, String inReplyToId, String visibility) {
+    private void postStatus(String text, String inReplyToId, String visibility, ArrayList<JsonElement> mediaArrayList) {
+        System.out.format("Post in reply to: %s\n", inReplyToId);
         String urlString = String.format("https://%s/api/v1/statuses", Utils.getProperty(settings, Literals.instance.name()));
         JsonObject params = new JsonObject();
         params.addProperty(Literals.status.name(), text);
         params.addProperty(Literals.visibility.name(), visibility);
+        if (mediaArrayList != null && !mediaArrayList.isEmpty()) {
+            JsonArray jsonArray = new JsonArray();
+            for (JsonElement jsonElement : mediaArrayList) {
+                jsonArray.add(Utils.getProperty(jsonElement, Literals.id.name()));
+            }
+            params.add(Literals.media_ids.name(), jsonArray);
+        }
         if (Utils.isNotBlank(inReplyToId)) {
             params.addProperty("in_reply_to_id", inReplyToId);
         }
         JsonObject jsonObject = postAsJson(Utils.getUrl(urlString), params.toString());
-        System.out.format("Status posted: %s\n", jsonObject.get(Literals.url.name()).getAsString());
+        System.out.format("Status posted: %s\n", jsonObject);
     }
 
     private class WebSocketListener implements WebSocket.Listener {

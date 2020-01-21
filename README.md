@@ -8,3 +8,9 @@ ping ip address or host name
 
 date
 ```date```
+
+Hacker Public Radio
+```hpr```
+
+NASA Image of the Day
+```nasa```

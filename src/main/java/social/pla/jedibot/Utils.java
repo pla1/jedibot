@@ -1,20 +1,32 @@
 package social.pla.jedibot;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 
+import javax.imageio.ImageIO;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.Clip;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.*;
+import java.math.BigInteger;
 import java.net.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.util.Scanner;
+import java.util.*;
 
 public class Utils {
     public static final String SYMBOL_SPEAKER = "\uD83D\uDD0A";
@@ -24,8 +36,52 @@ public class Utils {
     public static final String SYMBOL_THUMBSDOWN = "\uD83D\uDC4E";
     private final static Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    public static void main(String[] args) {
-        System.out.format("%s\n", Utils.SYMBOL_THINKING);
+    public static void main(String[] args) throws Exception {
+        JsonObject settings = getSettings();
+        if (false) {
+            String urlString = "http://hackerpublicradio.org/eps/hpr2991.ogg";
+            URL url = new URL(urlString);
+            URL newUrl = Utils.getRedirect(url);
+            System.out.format("%s\n", newUrl);
+            System.exit(0);
+        }
+        if (false) {
+            String urlString = "http://hackerpublicradio.org/eps/hpr2991.ogg";
+            File file = Utils.downloadAudio(urlString);
+            System.out.format("%s\n", file.getAbsolutePath());
+            System.exit(0);
+
+        }
+        if (false) {
+            System.out.format("%s\n", Utils.SYMBOL_THINKING);
+            System.out.format("%s\n", gson.toJson(settings));
+            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
+        }
+        if (false) {
+            NasaDAO nasaDAO = new NasaDAO();
+            File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
+            System.out.format("%s\n", imageFile.getAbsolutePath());
+            JsonObject nasaImageOfTheDay = nasaDAO.getLatestImageOfTheDay();
+            JsonObject uploadedJo = Utils.uploadImage(imageFile);
+            ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
+            mediaArrayList.add(uploadedJo);
+            nasaImageOfTheDay.add(Main.Literals.nasaImageUpload.name(), uploadedJo);
+            settings.add(Main.Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
+            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
+        }
+        if (false) {
+            HprDAO hprDAO = new HprDAO();
+            JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
+            settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
+            File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
+            System.out.format("%s\n", audioFile.getAbsolutePath());
+            JsonObject uploadedJo = Utils.uploadImage(audioFile);
+            ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
+            mediaArrayList.add(uploadedJo);
+            hprLatestEpisode.add(Main.Literals.hprEpisodeUpload.name(), uploadedJo);
+            settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
+            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
+        }
         System.exit(0);
     }
 
@@ -37,6 +93,124 @@ public class Utils {
             e.printStackTrace();
         }
         return url;
+    }
+
+    public static String humanReadableByteCount(long bytes, boolean si) {
+        int unit = si ? 1000 : 1024;
+        if (bytes < unit) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(unit));
+        String pre = (si ? "kMGTPE" : "KMGTPE").charAt(exp - 1) + (si ? "" : "i");
+        return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
+    }
+
+    public static File downloadImage(String urlString) {
+        System.out.format("Download: %s\n", urlString);
+        try {
+            URL url = getRedirect(new URL(urlString));
+            BufferedImage image = ImageIO.read(url);
+            File outputFile = File.createTempFile(Main.Literals.nasaImageOfTheDay.name(), ".jpg");
+            ImageIO.write(image, "jpg", outputFile);
+            return outputFile;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static URL getRedirect(URL url) throws IOException {
+        HttpURLConnection connection = null;
+        String location = url.toString();
+        for (; ; ) {
+            url = new URL(location);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            String redirectLocation = connection.getHeaderField("Location");
+            System.out.format("New location: %s\n", redirectLocation);
+            if (redirectLocation == null) break;
+            location = redirectLocation;
+        }
+        return new URL(location);
+    }
+
+    public static File downloadAudio(String urlString) {
+        OutputStream outputStream = null;
+        try {
+            URL url = getRedirect(new URL(urlString));
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.setInstanceFollowRedirects(true);
+            InputStream inputStream = urlConnection.getInputStream();
+            File outputFile = File.createTempFile(Main.Literals.hprLatestEpisode.name(), ".mp3");
+            outputStream = new FileOutputStream(outputFile);
+            byte[] buffer = new byte[4096];
+            int length;
+            while ((length = inputStream.read(buffer)) > 0) {
+                outputStream.write(buffer, 0, length);
+            }
+            return outputFile;
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            close(outputStream);
+        }
+        return null;
+    }
+
+    private static HttpRequest.BodyPublisher ofMimeMultipartData(Map<Object, Object> data, String boundary) throws IOException {
+        ArrayList<byte[]> byteArrays = new ArrayList<byte[]>();
+        byte[] separator = ("--" + boundary + "\r\nContent-Disposition: form-data; name=")
+                .getBytes(StandardCharsets.UTF_8);
+        for (Map.Entry<Object, Object> entry : data.entrySet()) {
+            byteArrays.add(separator);
+            if (entry.getValue() instanceof Path) {
+                Path path = (Path) entry.getValue();
+                String mimeType = Files.probeContentType(path);
+                byteArrays.add(("\"" + entry.getKey() + "\"; filename=\"" + path.getFileName()
+                        + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                byte[] fileBytes = Files.readAllBytes(path);
+                //      System.out.format("Files.readAllBytes %d length.\n%s", fileBytes.length, new String(fileBytes));
+                byteArrays.add(fileBytes);
+                byteArrays.add("\r\n".getBytes(StandardCharsets.UTF_8));
+            } else {
+                byteArrays.add(("\"" + entry.getKey() + "\"\r\n\r\n" + entry.getValue() + "\r\n")
+                        .getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        byteArrays.add(("--" + boundary + "--").getBytes(StandardCharsets.UTF_8));
+        return HttpRequest.BodyPublishers.ofByteArrays(byteArrays);
+    }
+
+    public static String humanReadableByteCount(long bytes) {
+        return humanReadableByteCount(bytes, true);
+    }
+
+    private static JsonObject uploadImage(File file) throws Exception {
+        JsonObject settings = getSettings();
+        String urlString = String.format("https://%s/api/v1/media", Utils.getProperty(settings, Main.Literals.instance.name()));
+        System.out.format("Upload image %s\n", urlString);
+        if (!file.exists()) {
+            System.out.format("File: \"%s\" does not exist.\n", file.getAbsolutePath());
+            return null;
+        }
+        HttpClient client = HttpClient.newBuilder().build();
+        Map<Object, Object> data = new LinkedHashMap<>();
+        data.put(Main.Literals.access_token.name(), Utils.getProperty(settings, Main.Literals.access_token.name()));
+        data.put(Main.Literals.description.name(), String.format("%s uploaded by JediBot.", file.getAbsolutePath()));
+        data.put(Main.Literals.file.name(), Paths.get(file.getAbsolutePath()));
+        String boundary = new BigInteger(256, new Random()).toString();
+        HttpRequest request = HttpRequest.newBuilder()
+                .header("Content-Type", "multipart/form-data;boundary=" + boundary)
+                .POST(ofMimeMultipartData(data, boundary))
+                .uri(URI.create(urlString))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        //   System.out.format("%s\n", response.body());
+        int responseStatusCode = response.statusCode();
+        if (responseStatusCode == 413) {
+            System.out.format("File %s is too large. Size is %s.\n", file.getAbsolutePath(), Utils.humanReadableByteCount(file.length()));
+            return null;
+        }
+        JsonElement jsonElement = JsonParser.parseString(response.body());
+        return jsonElement.getAsJsonObject();
     }
 
     public static URI getUri(String urlString) {
@@ -68,7 +242,7 @@ public class Utils {
         }
     }
 
-    public static JsonObject getSettings() {
+    public synchronized static JsonObject getSettings() {
         String settingsFileName = getSettingsFileName();
         FileInputStream fis = null;
         File propertyFile = new File(settingsFileName);
@@ -100,6 +274,11 @@ public class Utils {
                     if (object instanceof Clip) {
                         Clip clip = (Clip) object;
                         clip.close();
+                        closed = true;
+                    }
+                    if (object instanceof FileChannel) {
+                        FileChannel fileChannel = (FileChannel) object;
+                        fileChannel.close();
                         closed = true;
                     }
                     if (object instanceof java.io.BufferedOutputStream) {
@@ -227,17 +406,27 @@ public class Utils {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
-    public static void write(String outputFileName, String text) {
-        PrintWriter pw = null;
+    public static boolean write(String outputFileName, String text) {
         try {
-            pw = new PrintWriter(outputFileName, StandardCharsets.UTF_8);
-            pw.write(text);
+            RandomAccessFile outputFile = new RandomAccessFile(outputFileName, "rw");
+            FileChannel fileChannel = outputFile.getChannel();
+            FileLock fileLock = fileChannel.lock();
+            System.out.format("%s lock valid: %s lock shared: %s\n", outputFileName, fileLock.isValid(), fileLock.isShared());
+            ByteBuffer buffer = null;
+            if (fileLock != null) {
+                buffer = ByteBuffer.wrap(text.getBytes());
+                buffer.put(text.getBytes());
+                buffer.flip();
+                while (buffer.hasRemaining()) {
+                    fileChannel.write(buffer);
+                }
+                close(fileChannel);
+                return true;
+            }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            close(pw);
         }
-        close(pw);
+        return false;
     }
 
     public static String getClassNames() {
@@ -256,26 +445,6 @@ public class Utils {
         return String.format("%s%s.jedibot.json", System.getProperty("user.home"), File.separator);
     }
 
-    public static String readFileToString(String fileName) {
-        StringBuilder sb = new StringBuilder();
-        File file = new File(fileName);
-        BufferedReader bufferedReader = null;
-        try {
-            bufferedReader = new BufferedReader(new FileReader(file));
-            String line = bufferedReader.readLine();
-            String lineSeparator = System.getProperty("line.separator");
-            while (line != null) {
-                sb.append(line);
-                sb.append(lineSeparator);
-                line = bufferedReader.readLine();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            close(bufferedReader);
-        }
-        return sb.toString();
-    }
 
     public static String ping(String ipAddress) {
         int timeoutSeconds = 3;
