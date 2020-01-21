@@ -2,15 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="52dfc206-5c55-48cc-ad12-9c267f49e6b4" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/help.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/5.2.1/executionHistory/executionHistory.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/5.2.1/executionHistory/executionHistory.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/5.2.1/fileContent/fileContent.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/5.2.1/fileContent/fileContent.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/5.2.1/fileHashes/fileHashes.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/5.2.1/fileHashes/fileHashes.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/5.2.1/javaCompile/classAnalysis.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/5.2.1/javaCompile/classAnalysis.bin" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/social/pla/jedibot/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/social/pla/jedibot/Main.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/social/pla/jedibot/Utils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/social/pla/jedibot/Utils.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -171,24 +164,32 @@
       <option name="project" value="LOCAL" />
       <updated>1579574880847</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Added help.txt file.">
+      <created>1579575616412</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1579575616413</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Update README" />
     <MESSAGE value="Added hpr and nasa routines." />
     <MESSAGE value="Remove CDATA from XML feed." />
-    <option name="LAST_COMMIT_MESSAGE" value="Remove CDATA from XML feed." />
+    <MESSAGE value="Added help.txt file." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added help.txt file." />
   </component>
   <component name="WindowStateProjectService">
     <state x="2271" y="755" width="1053" height="676" key="#Project_Structure" timestamp="1579557780939">
       <screen x="0" y="28" width="3840" height="2131" />
     </state>
     <state x="2271" y="755" width="1053" height="676" key="#Project_Structure/0.28.3840.2131@0.28.3840.2131" timestamp="1579557780939" />
-    <state x="2486" y="686" width="779" height="811" key="CommitChangelistDialog2" timestamp="1579574880775">
+    <state x="2486" y="686" width="779" height="811" key="CommitChangelistDialog2" timestamp="1579575616291">
       <screen x="0" y="28" width="3840" height="2131" />
     </state>
-    <state x="2486" y="686" width="779" height="811" key="CommitChangelistDialog2/0.28.3840.2131@0.28.3840.2131" timestamp="1579574880775" />
+    <state x="2486" y="686" width="779" height="811" key="CommitChangelistDialog2/0.28.3840.2131@0.28.3840.2131" timestamp="1579575616291" />
     <state x="2486" y="686" width="779" height="814" key="CommitChangelistDialog2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537239898" />
     <state x="2663" y="852" width="426" height="482" key="FileChooserDialogImpl" timestamp="1579521162387">
       <screen x="0" y="28" width="3840" height="2132" />
@@ -218,10 +219,10 @@
       <screen x="0" y="28" width="3840" height="2131" />
     </state>
     <state x="2369" y="728" key="SettingsEditor/0.28.3840.2131@0.28.3840.2131" timestamp="1579557801934" />
-    <state x="2475" y="830" width="802" height="527" key="Vcs.Push.Dialog.v2" timestamp="1579574886964">
+    <state x="2475" y="830" width="802" height="527" key="Vcs.Push.Dialog.v2" timestamp="1579575622397">
       <screen x="0" y="28" width="3840" height="2131" />
     </state>
-    <state x="2475" y="830" width="802" height="527" key="Vcs.Push.Dialog.v2/0.28.3840.2131@0.28.3840.2131" timestamp="1579574886964" />
+    <state x="2475" y="830" width="802" height="527" key="Vcs.Push.Dialog.v2/0.28.3840.2131@0.28.3840.2131" timestamp="1579575622397" />
     <state x="2475" y="830" width="802" height="526" key="Vcs.Push.Dialog.v2/0.28.3840.2132@0.28.3840.2132" timestamp="1579537243628" />
     <state x="2531" y="690" width="710" height="807" key="find.popup" timestamp="1579575192653">
       <screen x="0" y="28" width="3840" height="2131" />
