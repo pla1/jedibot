@@ -11,8 +11,12 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.zone.ZoneRulesException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.TimeZone;
 import java.util.concurrent.*;
 import java.util.logging.FileHandler;
 import java.util.logging.LogManager;
@@ -30,6 +34,9 @@ public class Main {
     private int sleepInterval = 30;
     private final HprDAO hprDAO = new HprDAO();
     private final NasaDAO nasaDAO = new NasaDAO();
+    private final XkcdDAO xkcdDAO = new XkcdDAO();
+    private final long MINUTES_RSS_FEED_INTERVAL = 30;
+    private final long ZERO_INITIAL_DELAY = 0;
 
     public Main() {
         setup();
@@ -57,7 +64,7 @@ public class Main {
         }
         System.out.format("Using instance: %s as %s\n", settings.get(Literals.instance.name()), whoami());
         WorkerRssFeeds worker = new WorkerRssFeeds();
-        ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker, 0, 1, TimeUnit.MINUTES);
+        ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker, ZERO_INITIAL_DELAY, MINUTES_RSS_FEED_INTERVAL, TimeUnit.MINUTES);
     }
 
     private void setupWebsocket() {
@@ -280,6 +287,15 @@ public class Main {
                     Utils.getProperty(nasaImageOfTheDay, Main.Literals.description.name()),
                     Utils.getProperty(nasaImageOfTheDay, Main.Literals.link.name()));
         }
+        if (Literals.xkcd.name().equalsIgnoreCase(text)) {
+            JsonObject xkcdLatest = settings.get(Literals.xkcdLatest.name()).getAsJsonObject();
+            JsonObject uploadedImage = xkcdLatest.get(Literals.xkcdImageUpload.name()).getAsJsonObject();
+            mediaArrayList.add(uploadedImage);
+            output = String.format("%s\n\n%s\n\n%s",
+                    Utils.getProperty(xkcdLatest, Main.Literals.title.name()),
+                    Utils.getProperty(xkcdLatest, Main.Literals.description.name()),
+                    Utils.getProperty(xkcdLatest, Main.Literals.link.name()));
+        }
         if (Literals.hpr.name().equalsIgnoreCase(text)) {
             JsonObject hprLatestEpisode = settings.get(Literals.hprLatestEpisode.name()).getAsJsonObject();
             JsonObject uploadedAudio = hprLatestEpisode.get(Literals.hprEpisodeUpload.name()).getAsJsonObject();
@@ -295,8 +311,17 @@ public class Main {
             System.exit(0);
         }
         String[] words = text.split("\\s+");
-        if (words.length == 2 && Literals.ping.name().equalsIgnoreCase(words[0])) {
-            output = Utils.ping(words[1]);
+        if (words.length == 2) {
+            if (Literals.ping.name().equalsIgnoreCase(words[0])) {
+                output = Utils.ping(words[1]);
+            }
+            if (Literals.date.name().equalsIgnoreCase(words[0])) {
+                try {
+                    output = ZonedDateTime.now(ZoneId.of(words[1])).toString();
+                } catch (ZoneRulesException e) {
+                    output = String.format("%s\n\nValid zone IDs - https://paste.ubuntu.com/p/thZHPZkdrd/", e.getLocalizedMessage());
+                }
+            }
         }
         if (Utils.isBlank(output)) {
             output = String.format("Don't know how to respond to \"%s\". %s", text, Utils.SYMBOL_THINKING);
@@ -331,10 +356,34 @@ public class Main {
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
         date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
-        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, imageUrl, updated, summary
+        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, imageUrl, updated, summary, xkcdLatest, xkcdImageUpload, xkcd
     }
 
     class WorkerRssFeeds extends Thread {
+        private void xkcd() {
+            JsonObject settings = Utils.getSettings();
+            JsonObject xkcdLatestSettings = settings.getAsJsonObject(Literals.xkcdLatest.name());
+            JsonObject xkcdLatest = xkcdDAO.getLatest();
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            if (xkcdLatest == null || Utils.isBlank(Utils.getProperty(xkcdLatest, Literals.title.name()))) {
+                System.out.format("Something went wrong while retrieving the latest XKCD. %s\n", xkcdLatest);
+                return;
+            }
+            if (xkcdLatestSettings == null) {
+                System.out.format("XKCD from settings not found. Adding:\n%s\n", gson.toJson(xkcdLatest));
+                xkcdUploadMedia(settings, xkcdLatest);
+            } else {
+                String title = Utils.getProperty(xkcdLatest, Literals.title.name());
+                String titleFromSettings = Utils.getProperty(xkcdLatestSettings, Literals.title.name());
+                if (!title.equals(titleFromSettings)) {
+                    System.out.format("XKCD title changed from: %s to %s\n", titleFromSettings, title);
+                    xkcdUploadMedia(settings, xkcdLatest);
+                } else {
+                    System.out.format("XKCD title has not changed. %s", title);
+                }
+            }
+        }
+
         private void nasa() {
             JsonObject settings = Utils.getSettings();
             JsonObject nasaImageOfTheDaySettings = settings.getAsJsonObject(Literals.nasaImageOfTheDay.name());
@@ -358,6 +407,16 @@ public class Main {
                 }
             }
         }
+
+        private void xkcdUploadMedia(JsonObject settings, JsonObject xkcdLatest) {
+            settings.add(Literals.xkcdLatest.name(), xkcdLatest);
+            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
+            File imageFile = Utils.downloadImage(settings.get(Main.Literals.xkcdLatest.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
+            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
+            xkcdLatest.add(Literals.xkcdImageUpload.name(), uploadedJo);
+            Utils.writeSettings(settings);
+        }
+
         private void nasaUploadMedia(JsonObject settings, JsonObject nasaImageOfTheDay) {
             settings.add(Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
             settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
@@ -366,6 +425,7 @@ public class Main {
             nasaImageOfTheDay.add(Literals.nasaImageUpload.name(), uploadedJo);
             Utils.writeSettings(settings);
         }
+
         private void hpr() {
             JsonObject settings = Utils.getSettings();
             JsonObject hprLatestEpisodeFromSettings = settings.getAsJsonObject(Literals.hprLatestEpisode.name());
@@ -402,6 +462,7 @@ public class Main {
         @Override
         public void run() {
             System.out.format("%s running at %s\n", this.getClass().getCanonicalName(), new Date());
+            xkcd();
             hpr();
             nasa();
         }

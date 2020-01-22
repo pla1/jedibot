@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.util.Date;
 
 public class HprDAO {
-    private final String URL_FEED_HPR = "http://hackerpublicradio.org/hpr_rss.php";
+    private final String URL_FEED = "http://hackerpublicradio.org/hpr_rss.php";
 
     public static void main(String[] args) throws Exception {
         HprDAO dao = new HprDAO();
@@ -32,7 +32,7 @@ public class HprDAO {
     public JsonObject getLatestEpisode() {
         JsonObject jsonObject = new JsonObject();
         try {
-            Document document = Jsoup.connect(URL_FEED_HPR)
+            Document document = Jsoup.connect(URL_FEED)
                     .parser(Parser.xmlParser())
                     .timeout(1000 * 3)
                     .get();

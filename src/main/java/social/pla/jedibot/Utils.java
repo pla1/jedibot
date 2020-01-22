@@ -22,6 +22,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.zone.ZoneRulesProvider;
 import java.util.*;
 
 public class Utils {
@@ -35,6 +36,10 @@ public class Utils {
     public static void main(String[] args) throws Exception {
         JsonObject settings = getSettings();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        if (true) {
+            System.out.println(Utils.listZoneIds());
+            System.exit(0);
+        }
         if (false) {
             String urlString = "http://hackerpublicradio.org/eps/hpr2991.ogg";
             URL url = new URL(urlString);
@@ -66,7 +71,7 @@ public class Utils {
             settings.add(Main.Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
             Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
         }
-        if (true) {
+        if (false) {
             HprDAO hprDAO = new HprDAO();
             JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
             settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
@@ -147,6 +152,18 @@ public class Utils {
             close(bufferedReader);
         }
         return "";
+    }
+
+    public static String listZoneIds() {
+        StringBuilder sb = new StringBuilder();
+        Set<String> list = ZoneRulesProvider.getAvailableZoneIds();
+        ArrayList<String> zoneIDs = new ArrayList<String>(list);
+        Collections.sort(zoneIDs);
+        sb.append(String.format("%d zone IDs\n", list.size()));
+        for (String zoneId : zoneIDs) {
+            sb.append(zoneId).append("\n");
+        }
+        return sb.toString();
     }
 
     public static File downloadAudio(String urlString) {

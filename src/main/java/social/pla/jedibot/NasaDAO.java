@@ -11,7 +11,7 @@ import org.jsoup.nodes.Element;
 import java.io.IOException;
 
 public class NasaDAO {
-    private final String URL_FEED_NASA_IOD = "https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss";
+    private final String URL_FEED = "https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss";
 
     public static void main(String[] args) throws Exception {
         NasaDAO dao = new NasaDAO();
@@ -23,7 +23,7 @@ public class NasaDAO {
     public JsonObject getLatestImageOfTheDay()  {
         JsonObject jsonObject = new JsonObject();
         try {
-            Document document = Jsoup.connect(URL_FEED_NASA_IOD)
+            Document document = Jsoup.connect(URL_FEED)
                     .parser(Parser.xmlParser())
                     .timeout(1000 * 3)
                     .get();

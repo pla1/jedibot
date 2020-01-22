@@ -53,7 +53,6 @@ public class XkcdDAO {
                         String description = imageElement.attr("title");
                         jsonObject.addProperty(Main.Literals.description.name(), description);
                     }
-
                 }
                 return jsonObject;
             }
