@@ -29,3 +29,5 @@ build/
 gradle/
 
 .gradle/
+
+jedibotdb/

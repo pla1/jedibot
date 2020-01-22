@@ -18,10 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
+import java.sql.*;
 import java.time.zone.ZoneRulesProvider;
 import java.util.*;
 
@@ -37,6 +34,11 @@ public class Utils {
         JsonObject settings = getSettings();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         if (true) {
+            Connection connection = Utils.getConnection();
+            Utils.close(connection);
+            System.exit(0);
+        }
+        if (false) {
             System.out.println(Utils.listZoneIds());
             System.exit(0);
         }
@@ -301,6 +303,21 @@ public class Utils {
             Utils.close(fis);
         }
         return null;
+    }
+
+    public static Connection getConnection() throws SQLException, ClassNotFoundException {
+        String fileName = "/etc/social.pla.jedibot.properties";
+        Properties properties = new Properties();
+        try {
+            properties.load(new FileReader(fileName));
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.format("Properties file not found: %s.\n", fileName);
+            return null;
+        }
+        Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+        String url = String.format("jdbc:derby:%s", properties.getProperty("databaseName"));
+        return DriverManager.getConnection(url, properties);
     }
 
     public static void close(Object... objects) {

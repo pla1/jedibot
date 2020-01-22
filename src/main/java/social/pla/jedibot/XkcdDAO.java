@@ -9,11 +9,31 @@ import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
 
 import java.io.IOException;
+import java.sql.*;
+import java.util.Properties;
 
 public class XkcdDAO {
     private final static String URL_FEED = "https://xkcd.com/atom.xml";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception  {
+        if (true) {
+            Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+            Connection connection = DriverManager.getConnection("jdbc:derby:jedibotdb;create=true;");
+            Statement statement = connection.createStatement();
+            try {
+                statement.execute("drop table test2");
+            } catch(SQLException e) {
+
+            }
+            statement.execute("create table test2 (fld varchar(11))");
+            statement.execute("insert into test2 values('XYA')");
+            ResultSet rs = statement.executeQuery("select * from test2");
+            while (rs.next()) {
+                System.out.format("%s - %s\n", rs.getString(1), new java.util.Date());
+            }
+            Utils.close(rs, statement, connection);
+            System.exit(0);
+        }
         XkcdDAO dao = new XkcdDAO();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         JsonObject jsonObject = dao.getLatest();

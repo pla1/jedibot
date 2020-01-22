@@ -9,8 +9,14 @@ then
   echo -e "Example:\n\ngit clone https://github.com/pla1/jedibot.git\n./run.sh"
   exit -1
 fi
+derby="derby-10.15.1.3.jar'"
 jsoup="jsoup-1.12.1.jar"
 gson="gson-2.8.6.jar"
+if [ ! -f "$derby" ]
+then
+  echo "Downloading $derby."
+  wget 'https://repo1.maven.org/maven2/org/apache/derby/derby/10.15.1.3/derby-10.15.1.3.jar' --output-document="$derby"
+fi
 if [ ! -f "$jsoup" ]
 then
   echo "Downloading $jsoup."
