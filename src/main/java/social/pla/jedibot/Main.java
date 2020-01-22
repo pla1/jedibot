@@ -267,7 +267,6 @@ public class Main {
             System.out.format("Text not found in message %s\n", jsonElement);
         }
         JsonObject settings = Utils.getSettings();
-        String visibility = Utils.getProperty(statusJe, Literals.visibility.name());
         String output = null;
         if (Literals.help.name().equalsIgnoreCase(text)) {
             output = String.format("Help response goes here. %s", new Date());
@@ -281,29 +280,17 @@ public class Main {
         if (Literals.nasa.name().equalsIgnoreCase(text)) {
             JsonObject nasaImageOfTheDay = settings.get(Literals.nasaImageOfTheDay.name()).getAsJsonObject();
             JsonObject uploadedImage = nasaImageOfTheDay.get(Literals.nasaImageUpload.name()).getAsJsonObject();
-            mediaArrayList.add(uploadedImage);
-            output = String.format("%s\n\n%s\n\n%s",
-                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.title.name()),
-                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.description.name()),
-                    Utils.getProperty(nasaImageOfTheDay, Main.Literals.link.name()));
+            postStandardMessageWithMedia(nasaImageOfTheDay, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
         }
         if (Literals.xkcd.name().equalsIgnoreCase(text)) {
             JsonObject xkcdLatest = settings.get(Literals.xkcdLatest.name()).getAsJsonObject();
             JsonObject uploadedImage = xkcdLatest.get(Literals.xkcdImageUpload.name()).getAsJsonObject();
-            mediaArrayList.add(uploadedImage);
-            output = String.format("%s\n\n%s\n\n%s",
-                    Utils.getProperty(xkcdLatest, Main.Literals.title.name()),
-                    Utils.getProperty(xkcdLatest, Main.Literals.description.name()),
-                    Utils.getProperty(xkcdLatest, Main.Literals.link.name()));
+            postStandardMessageWithMedia(xkcdLatest, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
         }
         if (Literals.hpr.name().equalsIgnoreCase(text)) {
             JsonObject hprLatestEpisode = settings.get(Literals.hprLatestEpisode.name()).getAsJsonObject();
             JsonObject uploadedAudio = hprLatestEpisode.get(Literals.hprEpisodeUpload.name()).getAsJsonObject();
-            mediaArrayList.add(uploadedAudio);
-            output = String.format("%s\n\n%s\n\n%s",
-                    Utils.getProperty(hprLatestEpisode, Main.Literals.title.name()),
-                    Utils.getProperty(hprLatestEpisode, Main.Literals.description.name()),
-                    Utils.getProperty(hprLatestEpisode, Main.Literals.link.name()));
+            postStandardMessageWithMedia(hprLatestEpisode, uploadedAudio, Utils.getProperty(statusJe, Literals.id.name()), null);
         }
         if (text.equalsIgnoreCase(Literals.quit.name())
                 && Literals.pla.name().equalsIgnoreCase(accountName)) {
@@ -326,16 +313,29 @@ public class Main {
         if (Utils.isBlank(output)) {
             output = String.format("Don't know how to respond to \"%s\". %s", text, Utils.SYMBOL_THINKING);
         }
-        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), visibility, mediaArrayList);
+        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), mediaArrayList);
     }
 
-    private void postStatus(String text, String inReplyToId, String visibility, ArrayList<JsonElement> mediaArrayList) {
+    private void postStandardMessageWithMedia(JsonElement latest, JsonElement uploadedMedia, String inReplyToId, String userName) {
+        String text = String.format("%s\n\n%s\n\n%s",
+                Utils.getProperty(latest, Main.Literals.title.name()),
+                Utils.getProperty(latest, Main.Literals.description.name()),
+                Utils.getProperty(latest, Main.Literals.link.name()));
+        if (Utils.isNotBlank(userName)) {
+            text = String.format("%s %s", userName, text);
+        }
+        ArrayList<JsonElement> mediaList = new ArrayList<>();
+        mediaList.add(uploadedMedia);
+        postStatus(text, inReplyToId, mediaList);
+    }
+
+    private void postStatus(String text, String inReplyToId, ArrayList<JsonElement> mediaArrayList) {
         System.out.format("Post in reply to: %s\n", inReplyToId);
         JsonObject settings = Utils.getSettings();
         String urlString = String.format("https://%s/api/v1/statuses", Utils.getProperty(settings, Literals.instance.name()));
         JsonObject params = new JsonObject();
         params.addProperty(Literals.status.name(), text);
-        params.addProperty(Literals.visibility.name(), visibility);
+        params.addProperty(Literals.visibility.name(), Literals.direct.name());
         if (mediaArrayList != null && !mediaArrayList.isEmpty()) {
             JsonArray jsonArray = new JsonArray();
             for (JsonElement jsonElement : mediaArrayList) {
@@ -356,7 +356,7 @@ public class Main {
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
         date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
-        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, updated, summary, xkcdLatest, xkcdImageUpload, xkcd
+        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, updated, summary, xkcdLatest, xkcdImageUpload, xkcd, direct
     }
 
     class WorkerRssFeeds extends Thread {
@@ -377,7 +377,9 @@ public class Main {
                 String titleFromSettings = Utils.getProperty(xkcdLatestSettings, Literals.title.name());
                 if (!title.equals(titleFromSettings)) {
                     System.out.format("XKCD title changed from: %s to %s\n", titleFromSettings, title);
-                    xkcdUploadMedia(settings, xkcdLatest);
+                    JsonObject uploadedMedia = xkcdUploadMedia(settings, xkcdLatest);
+                    String userName = "@pla";
+                    postStandardMessageWithMedia(xkcdLatest, uploadedMedia, null, userName);
                 } else {
                     System.out.format("XKCD title has not changed. %s", title);
                 }
@@ -401,29 +403,33 @@ public class Main {
                 String titleFromSettings = Utils.getProperty(nasaImageOfTheDaySettings, Literals.title.name());
                 if (!title.equals(titleFromSettings)) {
                     System.out.format("NASA IOD title changed from: %s to %s\n", titleFromSettings, title);
-                    nasaUploadMedia(settings, nasaImageOfTheDay);
+                    JsonObject uploadedMedia = nasaUploadMedia(settings, nasaImageOfTheDay);
+                    String userName = "@pla";
+                    postStandardMessageWithMedia(nasaImageOfTheDay, uploadedMedia, null, userName);
                 } else {
                     System.out.format("NASA IOD title has not changed. %s", title);
                 }
             }
         }
 
-        private void xkcdUploadMedia(JsonObject settings, JsonObject xkcdLatest) {
+        private JsonObject xkcdUploadMedia(JsonObject settings, JsonObject xkcdLatest) {
             settings.add(Literals.xkcdLatest.name(), xkcdLatest);
             settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
             File imageFile = Utils.downloadImage(settings.get(Main.Literals.xkcdLatest.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
             JsonObject uploadedJo = Utils.uploadMedia(imageFile);
             xkcdLatest.add(Literals.xkcdImageUpload.name(), uploadedJo);
             Utils.writeSettings(settings);
+            return uploadedJo;
         }
 
-        private void nasaUploadMedia(JsonObject settings, JsonObject nasaImageOfTheDay) {
+        private JsonObject nasaUploadMedia(JsonObject settings, JsonObject nasaImageOfTheDay) {
             settings.add(Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
             settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
             File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
             JsonObject uploadedJo = Utils.uploadMedia(imageFile);
             nasaImageOfTheDay.add(Literals.nasaImageUpload.name(), uploadedJo);
             Utils.writeSettings(settings);
+            return uploadedJo;
         }
 
         private void hpr() {
@@ -443,20 +449,23 @@ public class Main {
                 String titleFromSettings = Utils.getProperty(hprLatestEpisodeFromSettings, Literals.title.name());
                 if (!title.equals(titleFromSettings)) {
                     System.out.format("HPR title changed from: %s to %s\n", titleFromSettings, title);
-                    hprUploadMedia(settings, hprLatestEpisode);
+                    JsonObject uploadedMedia = hprUploadMedia(settings, hprLatestEpisode);
+                    String userName = "@pla";
+                    postStandardMessageWithMedia(hprLatestEpisode, uploadedMedia, null, userName);
                 } else {
                     System.out.format("HPR episode title has not changed. %s", title);
                 }
             }
         }
 
-        private void hprUploadMedia(JsonObject settings, JsonObject hprLatestEpisode) {
+        private JsonObject hprUploadMedia(JsonObject settings, JsonObject hprLatestEpisode) {
             settings.add(Literals.hprLatestEpisode.name(), hprLatestEpisode);
             settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
             File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
             JsonObject uploadedJo = Utils.uploadMedia(audioFile);
             hprLatestEpisode.add(Literals.hprEpisodeUpload.name(), uploadedJo);
             Utils.writeSettings(settings);
+            return uploadedJo;
         }
 
         @Override
