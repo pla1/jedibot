@@ -356,7 +356,7 @@ public class Main {
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
         date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
-        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, imageUrl, updated, summary, xkcdLatest, xkcdImageUpload, xkcd
+        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, updated, summary, xkcdLatest, xkcdImageUpload, xkcd
     }
 
     class WorkerRssFeeds extends Thread {
