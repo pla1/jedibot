@@ -35,7 +35,6 @@ public class XkcdDAO {
                     html = html.replace("<![CDATA[", "");
                     html = html.replace("]]>", "");
                     String text = Jsoup.parse(html).text();
-                    System.out.format("Name: %s value: %s\n", nodeName, text);
                     if (Main.Literals.title.name().equals(nodeName)
                             || Main.Literals.id.name().equals(nodeName)
                             || Main.Literals.updated.name().equals(nodeName)) {
