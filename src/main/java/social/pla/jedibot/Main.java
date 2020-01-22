@@ -262,7 +262,6 @@ public class Main {
         String text = getText(statusJe);
         System.out.format("Handling message: \"%s\".\n", text);
         text = clean(text);
-        ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
         if (Utils.isBlank(text)) {
             System.out.format("Text not found in message %s\n", jsonElement);
         }
@@ -281,16 +280,19 @@ public class Main {
             JsonObject nasaImageOfTheDay = settings.get(Literals.nasaImageOfTheDay.name()).getAsJsonObject();
             JsonObject uploadedImage = nasaImageOfTheDay.get(Literals.nasaImageUpload.name()).getAsJsonObject();
             postStandardMessageWithMedia(nasaImageOfTheDay, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
+            return;
         }
         if (Literals.xkcd.name().equalsIgnoreCase(text)) {
             JsonObject xkcdLatest = settings.get(Literals.xkcdLatest.name()).getAsJsonObject();
             JsonObject uploadedImage = xkcdLatest.get(Literals.xkcdImageUpload.name()).getAsJsonObject();
             postStandardMessageWithMedia(xkcdLatest, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
+            return;
         }
         if (Literals.hpr.name().equalsIgnoreCase(text)) {
             JsonObject hprLatestEpisode = settings.get(Literals.hprLatestEpisode.name()).getAsJsonObject();
             JsonObject uploadedAudio = hprLatestEpisode.get(Literals.hprEpisodeUpload.name()).getAsJsonObject();
             postStandardMessageWithMedia(hprLatestEpisode, uploadedAudio, Utils.getProperty(statusJe, Literals.id.name()), null);
+            return;
         }
         if (text.equalsIgnoreCase(Literals.quit.name())
                 && Literals.pla.name().equalsIgnoreCase(accountName)) {
@@ -313,7 +315,7 @@ public class Main {
         if (Utils.isBlank(output)) {
             output = String.format("Don't know how to respond to \"%s\". %s", text, Utils.SYMBOL_THINKING);
         }
-        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), mediaArrayList);
+        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), null);
     }
 
     private void postStandardMessageWithMedia(JsonElement latest, JsonElement uploadedMedia, String inReplyToId, String userName) {
@@ -453,7 +455,7 @@ public class Main {
                     String userName = "@pla";
                     postStandardMessageWithMedia(hprLatestEpisode, uploadedMedia, null, userName);
                 } else {
-                    System.out.format("HPR episode title has not changed. %s", title);
+                    System.out.format("HPR episode title has not changed. %s.\n", title);
                 }
             }
         }
