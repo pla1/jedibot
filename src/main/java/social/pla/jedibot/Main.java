@@ -16,7 +16,6 @@ import java.time.ZonedDateTime;
 import java.time.zone.ZoneRulesException;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.TimeZone;
 import java.util.concurrent.*;
 import java.util.logging.FileHandler;
 import java.util.logging.LogManager;
@@ -32,11 +31,12 @@ public class Main {
     private File jsonLoggerFile;
     private WebSocket webSocket;
     private int sleepInterval = 30;
-    private final HprDAO hprDAO = new HprDAO();
-    private final NasaDAO nasaDAO = new NasaDAO();
-    private final XkcdDAO xkcdDAO = new XkcdDAO();
     private final long MINUTES_RSS_FEED_INTERVAL = 30;
     private final long ZERO_INITIAL_DELAY = 0;
+    private final FeedDAO feedDAO = new FeedDAO();
+    private final SubscriberDAO subscriberDAO = new SubscriberDAO();
+    private final ApplicationDAO applicationDAO = new ApplicationDAO();
+    private final String TAG = this.getClass().getCanonicalName();
 
     public Main() {
         setup();
@@ -55,23 +55,25 @@ public class Main {
     }
 
     private void setup() {
-        console = new BufferedReader(new InputStreamReader(System.in));
         logger = getLogger();
-        JsonObject settings = Utils.getSettings();
-        while (settings == null) {
-            createApp();
-            settings = Utils.getSettings();
+        Application application = applicationDAO.get(1);
+        if (!application.isFound()) {
+            console = new BufferedReader(new InputStreamReader(System.in));
+            while (!application.isFound()) {
+                application = createApp(application);
+            }
         }
-        System.out.format("Using instance: %s as %s\n", settings.get(Literals.instance.name()), whoami());
+        System.out.format("Using instance: %s as %s\n", application.getInstanceName(), whoami());
         WorkerRssFeeds worker = new WorkerRssFeeds();
         ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker, ZERO_INITIAL_DELAY, MINUTES_RSS_FEED_INTERVAL, TimeUnit.MINUTES);
     }
 
     private void setupWebsocket() {
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-        JsonObject settings = Utils.getSettings();
+        Application application = applicationDAO.get(1);
         String urlString = String.format("wss://%s/api/v1/streaming/?stream=user&access_token=%s",
-                Utils.getProperty(settings, Literals.instance.name()), Utils.getProperty(settings, Literals.access_token.name()));
+                application.getInstanceName(), application.getAccessToken());
+        System.out.format("Streaming URL: %s\n", urlString);
         WebSocketListener webSocketListener = new WebSocketListener("user");
         webSocket = client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5)).buildAsync(URI.create(urlString), webSocketListener).join();
     }
@@ -90,7 +92,7 @@ public class Main {
         }
     }
 
-    private void createApp() {
+    private Application createApp(Application application) {
         String prompt = "Type your instance name and press ENTER. For example: pleroma.site";
         String instance = ask(prompt);
         while (Utils.isBlank(instance)) {
@@ -106,7 +108,7 @@ public class Main {
         JsonObject jsonObject = postAsJson(Utils.getUrl(urlString), params.toString());
         if (!Utils.isJsonObject(jsonObject)) {
             System.out.format("Something went wrong while creating app on instance \"%s\". Try again.\n", instance);
-            return;
+            return application;
         }
         //   System.out.format("%s\n", jsonObject.toString());
         String urlOauthDance = String.format("https://%s/oauth/authorize?scope=%s&response_type=code&redirect_uri=%s&client_id=%s\n",
@@ -115,7 +117,7 @@ public class Main {
         String token = ask("Paste the token and press ENTER.");
         if (token == null || token.trim().length() < 20) {
             System.out.format("Token \"%s\" doesn't look valid. Try again.\n", token);
-            return;
+            return application;
         }
         urlString = String.format("https://%s/oauth/token", instance);
         params = new JsonObject();
@@ -124,23 +126,23 @@ public class Main {
         params.addProperty(Literals.grant_type.name(), Literals.authorization_code.name());
         params.addProperty(Literals.code.name(), token);
         params.addProperty(Literals.redirect_uri.name(), jsonObject.get(Literals.redirect_uri.name()).getAsString());
+        application.setClientId(jsonObject.get(Literals.client_id.name()).getAsString());
+        application.setClientSecret(jsonObject.get(Literals.client_secret.name()).getAsString());
+        application.setApplicationId(jsonObject.get(Literals.id.name()).getAsString());
         JsonObject outputJsonObject = postAsJson(Utils.getUrl(urlString), params.toString());
-        jsonObject.addProperty(Literals.access_token.name(), outputJsonObject.get(Literals.access_token.name()).getAsString());
-        jsonObject.addProperty(Literals.refresh_token.name(), Utils.getProperty(outputJsonObject, Literals.refresh_token.name()));
-        jsonObject.addProperty(Literals.me.name(), Utils.getProperty(outputJsonObject, Literals.me.name()));
-        jsonObject.addProperty(Literals.expires_in.name(), Utils.getProperty(outputJsonObject, Literals.expires_in.name()));
-        jsonObject.addProperty(Literals.created_at.name(), Utils.getProperty(outputJsonObject, Literals.created_at.name()));
-        jsonObject.addProperty(Literals.instance.name(), instance);
-        jsonObject.addProperty(Literals.milliseconds.name(), System.currentTimeMillis());
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        String pretty = gson.toJson(jsonObject);
-        Utils.write(Utils.getSettingsFileName(), pretty);
+        application.setAccessToken(outputJsonObject.get(Literals.access_token.name()).getAsString());
+        application.setRefreshToken(Utils.getProperty(outputJsonObject, Literals.refresh_token.name()));
+        application.setUser(Utils.getProperty(outputJsonObject, Literals.me.name()));
+        application.setInstanceName(instance);
+        application = applicationDAO.add(application);
         System.out.format("Added. You are now %s\n", whoami());
+        return application;
     }
 
     private String whoami() {
-        JsonObject settings = Utils.getSettings();
-        String urlString = String.format("https://%s/api/v1/accounts/verify_credentials", Utils.getProperty(settings, Literals.instance.name()));
+        Application application = applicationDAO.get(1);
+        String urlString = String.format("https://%s/api/v1/accounts/verify_credentials",
+                application.getInstanceName());
         JsonElement jsonElement = getJsonElement(urlString);
         return String.format("%s %s", Utils.getProperty(jsonElement, Literals.username.name()), Utils.getProperty(jsonElement, Literals.url.name()));
     }
@@ -152,10 +154,10 @@ public class Main {
     private JsonElement getJsonElement(String urlString, boolean ignoreExceptions) {
         URL url = Utils.getUrl(urlString);
         HttpsURLConnection urlConnection;
-        JsonObject settings = Utils.getSettings();
+        Application application = applicationDAO.get(1);
         try {
             urlConnection = (HttpsURLConnection) url.openConnection();
-            String authorization = String.format("Bearer %s", settings.get(Literals.access_token.name()).getAsString());
+            String authorization = String.format("Bearer %s", application.getAccessToken());
             urlConnection.setRequestProperty("Authorization", authorization);
             InputStream is = urlConnection.getInputStream();
             InputStreamReader isr = new InputStreamReader(is);
@@ -201,12 +203,12 @@ public class Main {
     }
 
     private JsonObject postAsJson(URL url, String json) {
-        //    System.out.format("postAsJson URL: %s JSON: \n%s\n", url.toString(), json);
+        System.out.format("postAsJson URL: %s JSON: \n%s\n", url.toString(), json);
         HttpsURLConnection urlConnection;
         InputStream inputStream = null;
         OutputStream outputStream = null;
         JsonObject jsonObject = null;
-        JsonObject settings = Utils.getSettings();
+        Application application = applicationDAO.get(1);
         try {
             urlConnection = (HttpsURLConnection) url.openConnection();
             urlConnection.setRequestProperty("Cache-Control", "no-cache");
@@ -214,7 +216,7 @@ public class Main {
             urlConnection.setRequestProperty("User-Agent", "Jediverse CLI");
             urlConnection.setUseCaches(false);
             urlConnection.setRequestMethod(Literals.POST.name());
-            String authorization = String.format("Bearer %s", Utils.getProperty(settings, Literals.access_token.name()));
+            String authorization = String.format("Bearer %s", application.getAccessToken());
             urlConnection.setRequestProperty("Authorization", authorization);
             if (json != null) {
                 urlConnection.setRequestProperty("Content-type", "application/json; charset=UTF-8");
@@ -259,13 +261,13 @@ public class Main {
         JsonElement statusJe = jsonElement.getAsJsonObject().get(Literals.status.name());
         JsonElement accountJe = jsonElement.getAsJsonObject().get(Literals.account.name());
         String accountName = Utils.getProperty(accountJe, Literals.acct.name());
+        ArrayList<JsonElement> uploadedMediaIds = new ArrayList<>();
         String text = getText(statusJe);
-        System.out.format("Handling message: \"%s\".\n", text);
+        System.out.format("Handling message from %s: \"%s\". %s\n", Utils.getProperty(accountJe, Literals.acct.name()), text, new Date());
         text = clean(text);
         if (Utils.isBlank(text)) {
             System.out.format("Text not found in message %s\n", jsonElement);
         }
-        JsonObject settings = Utils.getSettings();
         String output = null;
         if (Literals.help.name().equalsIgnoreCase(text)) {
             output = String.format("Help response goes here. %s", new Date());
@@ -274,32 +276,57 @@ public class Main {
             output = String.format("%s", new Date());
         }
         if (Literals.help.name().equalsIgnoreCase(text)) {
-            output = Utils.readFileToString("help.txt");
-        }
-        if (Literals.nasa.name().equalsIgnoreCase(text)) {
-            JsonObject nasaImageOfTheDay = settings.get(Literals.nasaImageOfTheDay.name()).getAsJsonObject();
-            JsonObject uploadedImage = nasaImageOfTheDay.get(Literals.nasaImageUpload.name()).getAsJsonObject();
-            postStandardMessageWithMedia(nasaImageOfTheDay, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
-            return;
-        }
-        if (Literals.xkcd.name().equalsIgnoreCase(text)) {
-            JsonObject xkcdLatest = settings.get(Literals.xkcdLatest.name()).getAsJsonObject();
-            JsonObject uploadedImage = xkcdLatest.get(Literals.xkcdImageUpload.name()).getAsJsonObject();
-            postStandardMessageWithMedia(xkcdLatest, uploadedImage, Utils.getProperty(statusJe, Literals.id.name()), null);
-            return;
-        }
-        if (Literals.hpr.name().equalsIgnoreCase(text)) {
-            JsonObject hprLatestEpisode = settings.get(Literals.hprLatestEpisode.name()).getAsJsonObject();
-            JsonObject uploadedAudio = hprLatestEpisode.get(Literals.hprEpisodeUpload.name()).getAsJsonObject();
-            postStandardMessageWithMedia(hprLatestEpisode, uploadedAudio, Utils.getProperty(statusJe, Literals.id.name()), null);
-            return;
-        }
-        if (text.equalsIgnoreCase(Literals.quit.name())
-                && Literals.pla.name().equalsIgnoreCase(accountName)) {
-            System.out.format("Received quit request from PLA. %s\n", new Date());
-            System.exit(0);
+            output = help();
         }
         String[] words = text.split("\\s+");
+        if (Literals.pla.name().equalsIgnoreCase(accountName)) {
+            if (text.equalsIgnoreCase(Literals.quit.name())) {
+                System.out.format("Received quit request from PLA. %s\n", new Date());
+                System.exit(0);
+            }
+            int i = 0;
+            if (words.length == 4 &&
+                    words[i++].equals("add") &&
+                    words[i++].equals("feed")) {
+                String urlString = words[i++];
+                String label = words[i++];
+                if (!urlString.startsWith("http")) {
+                    output = String.format("%s should start with http. %s - Example: add feed https://xkcd.com/atom.xml xkcd", urlString, Utils.SYMBOL_THINKING);
+                } else {
+                    Feed feed = feedDAO.add(urlString, label);
+                    output = String.format("Feed added to table: %s. Will update the feed next.", feed.isFound());
+                    WorkerRssFeeds worker = new WorkerRssFeeds();
+                    worker.start();
+                }
+            }
+        }
+        if (words.length == 1) {
+            Feed feed = feedDAO.get(text);
+            if (feed.isFound()) {
+                postMessage(feed, Utils.getProperty(statusJe, Literals.id.name()), null);
+                return;
+            }
+            if (Literals.ping.name().equalsIgnoreCase(words[0])) {
+                output = "You need to provide an IP address or host name to ping. Example: ping 8.8.8.8";
+            }
+            if ("subscriptions".equals(text)) {
+                ArrayList<Feed> feeds = feedDAO.getFromUser(accountName);
+                if (feeds.isEmpty()) {
+                    output = "%s isn't subscribed to any feeds. Try something like: subscribe xkcd";
+                } else {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("You are subscribed to: ");
+                    String comma = "";
+                    for (Feed f : feeds) {
+                        sb.append(comma);
+                        sb.append(f.getLabel());
+                        comma = ", ";
+                    }
+                    sb.append(".");
+                    output = sb.toString();
+                }
+            }
+        }
         if (words.length == 2) {
             if (Literals.ping.name().equalsIgnoreCase(words[0])) {
                 output = Utils.ping(words[1]);
@@ -311,30 +338,93 @@ public class Main {
                     output = String.format("%s\n\nValid zone IDs - https://paste.ubuntu.com/p/thZHPZkdrd/", e.getLocalizedMessage());
                 }
             }
+            if ("subscribe".equalsIgnoreCase(words[0])) {
+                Feed feed = feedDAO.get(words[1]);
+                if (feed.isFound()) {
+                    Subscriber subscriber = subscriberDAO.get(feed, accountName);
+                    if (subscriber.isFound()) {
+                        output = String.format("You are already subscribed to %s.", words[1]);
+                    } else {
+                        subscriber = subscriberDAO.add(feed, accountName);
+                        if (subscriber.isFound()) {
+                            output = String.format("You are now subscribed to %s", words[1]);
+                        } else {
+                            output = String.format("Subscription to %s failed.", words[1]);
+                        }
+                    }
+                } else {
+                    output = String.format("Feed with label: \"%s\" not found.", words[1]);
+                }
+            }
+            if ("unsubscribe".equalsIgnoreCase(words[0])) {
+                Feed feed = feedDAO.get(words[1]);
+                if (feed.isFound()) {
+                    Subscriber subscriber = subscriberDAO.get(feed, accountName);
+                    if (!subscriber.isFound()) {
+                        output = String.format("You are not subscribed to %s.", words[1]);
+                    } else {
+                        boolean deleted = subscriberDAO.delete(feed, accountName);
+                        if (deleted) {
+                            output = String.format("You have been unsubscribed from %s.", words[1]);
+                        } else {
+                            output = String.format("Unsubscribed from %s failed.", words[1]);
+                        }
+                    }
+                } else {
+                    output = String.format("Feed with label: \"%s\" not found.", words[1]);
+                }
+            }
         }
         if (Utils.isBlank(output)) {
             output = String.format("Don't know how to respond to \"%s\". %s", text, Utils.SYMBOL_THINKING);
         }
-        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), null);
+        postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), uploadedMediaIds);
     }
 
-    private void postStandardMessageWithMedia(JsonElement latest, JsonElement uploadedMedia, String inReplyToId, String userName) {
-        String text = String.format("%s\n\n%s\n\n%s",
-                Utils.getProperty(latest, Main.Literals.title.name()),
-                Utils.getProperty(latest, Main.Literals.description.name()),
-                Utils.getProperty(latest, Main.Literals.link.name()));
+    private String help() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Commands you can send to this bot: help, ping, date, subscribe, unsubscribe, subscriptions, ");
+        ArrayList<Feed> feeds = feedDAO.get();
+        String comma = "";
+        for (Feed feed : feeds) {
+            sb.append(comma);
+            sb.append(feed.getLabel());
+            comma = ", ";
+        }
+        sb.append("\n\nYou can subscribe to a feed like: subscribe xkcd");
+        sb.append("\n\nTo unsubscribe from a feed: unsubscribe xkcd");
+        sb.append(".\n\nCommands are case-sensitive.");
+        return sb.toString();
+    }
+
+    private void postMessage(Feed feed, String inReplyToId, String userName) {
+        String text;
+        if (feed.getUrl().contains("youtube.com")) {
+            text = String.format("%s\n\n%s",
+                    feed.getTitle(),
+                    feed.getUrl());
+        } else {
+            text = String.format("%s\n\n%s\n\n%s",
+                    feed.getTitle(),
+                    feed.getDescription(),
+                    feed.getUrl());
+        }
         if (Utils.isNotBlank(userName)) {
             text = String.format("%s %s", userName, text);
         }
         ArrayList<JsonElement> mediaList = new ArrayList<>();
-        mediaList.add(uploadedMedia);
+        if (Utils.isNotBlank(feed.getUploadedMedialId())) {
+            JsonObject jsonObject = new JsonObject();
+            jsonObject.addProperty(Literals.id.name(), feed.getUploadedMedialId());
+            mediaList.add(jsonObject);
+        }
         postStatus(text, inReplyToId, mediaList);
     }
 
     private void postStatus(String text, String inReplyToId, ArrayList<JsonElement> mediaArrayList) {
-        System.out.format("Post in reply to: %s\n", inReplyToId);
-        JsonObject settings = Utils.getSettings();
-        String urlString = String.format("https://%s/api/v1/statuses", Utils.getProperty(settings, Literals.instance.name()));
+        System.out.format("Post in reply to: %s Text: %s\n", inReplyToId, text);
+        Application application = applicationDAO.get(1);
+        String urlString = String.format("https://%s/api/v1/statuses", application.getInstanceName());
         JsonObject params = new JsonObject();
         params.addProperty(Literals.status.name(), text);
         params.addProperty(Literals.visibility.name(), Literals.direct.name());
@@ -353,129 +443,38 @@ public class Main {
     }
 
     public enum Literals {
-        id, instance, me, milliseconds, client_name, scopes, website, grant_type, access_token, refresh_token,
-        redirect_uri, redirect_uris, client_id, client_secret, code, expires_in, created_at, content, type, status,
+        id, me, client_name, scopes, website, grant_type, access_token, refresh_token,
+        redirect_uri, redirect_uris, client_id, client_secret, code, content, type, status,
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
-        date, pla, ping, link, photoUrl, enclosure, nasaImageOfTheDay, nasa, nasaImageUpload, pubDate, audioUrl, hpr,
-        hprLatestEpisode, hprEpisodeUpload, millisecondsUpdated, updated, summary, xkcdLatest, xkcdImageUpload, xkcd, direct
+        date, pla, ping, link, enclosure, nasaImageOfTheDay, nasa, pubDate, hpr,
+        hprLatestEpisode, updated, summary, xkcd, direct, label,
+        item, entry
     }
 
     class WorkerRssFeeds extends Thread {
-        private void xkcd() {
-            JsonObject settings = Utils.getSettings();
-            JsonObject xkcdLatestSettings = settings.getAsJsonObject(Literals.xkcdLatest.name());
-            JsonObject xkcdLatest = xkcdDAO.getLatest();
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            if (xkcdLatest == null || Utils.isBlank(Utils.getProperty(xkcdLatest, Literals.title.name()))) {
-                System.out.format("Something went wrong while retrieving the latest XKCD. %s\n", xkcdLatest);
-                return;
-            }
-            if (xkcdLatestSettings == null) {
-                System.out.format("XKCD from settings not found. Adding:\n%s\n", gson.toJson(xkcdLatest));
-                xkcdUploadMedia(settings, xkcdLatest);
-            } else {
-                String title = Utils.getProperty(xkcdLatest, Literals.title.name());
-                String titleFromSettings = Utils.getProperty(xkcdLatestSettings, Literals.title.name());
-                if (!title.equals(titleFromSettings)) {
-                    System.out.format("XKCD title changed from: %s to %s\n", titleFromSettings, title);
-                    JsonObject uploadedMedia = xkcdUploadMedia(settings, xkcdLatest);
-                    String userName = "@pla";
-                    postStandardMessageWithMedia(xkcdLatest, uploadedMedia, null, userName);
-                } else {
-                    System.out.format("XKCD title has not changed. %s", title);
-                }
-            }
-        }
-
-        private void nasa() {
-            JsonObject settings = Utils.getSettings();
-            JsonObject nasaImageOfTheDaySettings = settings.getAsJsonObject(Literals.nasaImageOfTheDay.name());
-            JsonObject nasaImageOfTheDay = nasaDAO.getLatestImageOfTheDay();
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            if (nasaImageOfTheDay == null || Utils.isBlank(Utils.getProperty(nasaImageOfTheDay, Literals.title.name()))) {
-                System.out.format("Something went wrong while retrieving the latest NASA Image of the day. %s\n", nasaImageOfTheDay);
-                return;
-            }
-            if (nasaImageOfTheDaySettings == null) {
-                System.out.format("NASA IOD from settings not found. Adding:\n%s\n", gson.toJson(nasaImageOfTheDay));
-                nasaUploadMedia(settings, nasaImageOfTheDay);
-            } else {
-                String title = Utils.getProperty(nasaImageOfTheDay, Literals.title.name());
-                String titleFromSettings = Utils.getProperty(nasaImageOfTheDaySettings, Literals.title.name());
-                if (!title.equals(titleFromSettings)) {
-                    System.out.format("NASA IOD title changed from: %s to %s\n", titleFromSettings, title);
-                    JsonObject uploadedMedia = nasaUploadMedia(settings, nasaImageOfTheDay);
-                    String userName = "@pla";
-                    postStandardMessageWithMedia(nasaImageOfTheDay, uploadedMedia, null, userName);
-                } else {
-                    System.out.format("NASA IOD title has not changed. %s", title);
-                }
-            }
-        }
-
-        private JsonObject xkcdUploadMedia(JsonObject settings, JsonObject xkcdLatest) {
-            settings.add(Literals.xkcdLatest.name(), xkcdLatest);
-            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
-            File imageFile = Utils.downloadImage(settings.get(Main.Literals.xkcdLatest.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
-            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
-            xkcdLatest.add(Literals.xkcdImageUpload.name(), uploadedJo);
-            Utils.writeSettings(settings);
-            return uploadedJo;
-        }
-
-        private JsonObject nasaUploadMedia(JsonObject settings, JsonObject nasaImageOfTheDay) {
-            settings.add(Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
-            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
-            File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
-            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
-            nasaImageOfTheDay.add(Literals.nasaImageUpload.name(), uploadedJo);
-            Utils.writeSettings(settings);
-            return uploadedJo;
-        }
-
-        private void hpr() {
-            JsonObject settings = Utils.getSettings();
-            JsonObject hprLatestEpisodeFromSettings = settings.getAsJsonObject(Literals.hprLatestEpisode.name());
-            JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            if (hprLatestEpisode == null || Utils.isBlank(Utils.getProperty(hprLatestEpisode, Literals.title.name()))) {
-                System.out.format("Something went wrong while retrieving the latest HPR episode. %s\n", hprLatestEpisode);
-                return;
-            }
-            if (hprLatestEpisodeFromSettings == null) {
-                System.out.format("HPR latest episode from settings not found. Adding:\n%s\n", gson.toJson(hprLatestEpisode));
-                hprUploadMedia(settings, hprLatestEpisode);
-            } else {
-                String title = Utils.getProperty(hprLatestEpisode, Literals.title.name());
-                String titleFromSettings = Utils.getProperty(hprLatestEpisodeFromSettings, Literals.title.name());
-                if (!title.equals(titleFromSettings)) {
-                    System.out.format("HPR title changed from: %s to %s\n", titleFromSettings, title);
-                    JsonObject uploadedMedia = hprUploadMedia(settings, hprLatestEpisode);
-                    String userName = "@pla";
-                    postStandardMessageWithMedia(hprLatestEpisode, uploadedMedia, null, userName);
-                } else {
-                    System.out.format("HPR episode title has not changed. %s.\n", title);
-                }
-            }
-        }
-
-        private JsonObject hprUploadMedia(JsonObject settings, JsonObject hprLatestEpisode) {
-            settings.add(Literals.hprLatestEpisode.name(), hprLatestEpisode);
-            settings.addProperty(Literals.millisecondsUpdated.name(), System.currentTimeMillis());
-            File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
-            JsonObject uploadedJo = Utils.uploadMedia(audioFile);
-            hprLatestEpisode.add(Literals.hprEpisodeUpload.name(), uploadedJo);
-            Utils.writeSettings(settings);
-            return uploadedJo;
-        }
 
         @Override
         public void run() {
-            System.out.format("%s running at %s\n", this.getClass().getCanonicalName(), new Date());
-            xkcd();
-            hpr();
-            nasa();
+            ArrayList<Feed> feeds = feedDAO.get();
+            System.out.format("%s running at %s. %d feeds to check.\n", TAG, new Date(), feeds.size());
+            int quantityChanged = 0;
+            for (Feed feed : feeds) {
+                String title = feed.getTitle();
+                feed = feedDAO.populateWithLatestRssEntry(feed);
+                if (title == null || !title.equalsIgnoreCase(feed.getTitle())) {
+                    if (Utils.isNotBlank(feed.getMediaUrl())) {
+                        feed = feedDAO.uploadMedia(feed);
+                    }
+                    feed = feedDAO.update(feed);
+                    String userName = "@pla";
+                    postMessage(feed, null, userName);
+                    quantityChanged++;
+                    // TODO in the future we'll do subscription notifications here.
+                }
+            }
+            System.out.format("%s running at %s. %d out of  %d feeds changed.\n",
+                    TAG, new Date(), quantityChanged, feeds.size());
         }
     }
 
@@ -491,26 +490,31 @@ public class Main {
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             if (last) {
                 sb.append(data);
-                JsonElement messageJsonElement = JsonParser.parseString(sb.toString());
-                Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                logger.info(gson.toJson(messageJsonElement));
-                if (Utils.isJsonObject(messageJsonElement)) {
-                    String event = Utils.getProperty(messageJsonElement, Literals.event.name());
-                    String payloadString = messageJsonElement.getAsJsonObject().get(Literals.payload.name()).getAsString();
-                    if (Literals.notification.name().equals(event)) {
-                        System.out.format("%s", Utils.SYMBOL_SPEAKER);
-                    }
-                    if (Utils.isNotBlank(payloadString)) {
-                        JsonElement payloadJsonElement = JsonParser.parseString(payloadString);
-                        if (Utils.isJsonObject(payloadJsonElement)) {
-                            System.out.format("%s\n", payloadJsonElement);
-                            handleMessage(payloadJsonElement);
+                System.out.format("Web socket mesage: \"%s\".\n", sb.toString());
+                if (sb.toString().trim().length() == 0) {
+                    System.out.format("Websocket message is blank. %s\n", new Date());
+                } else {
+                    JsonElement messageJsonElement = JsonParser.parseString(sb.toString());
+                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                    logger.info(gson.toJson(messageJsonElement));
+                    if (Utils.isJsonObject(messageJsonElement)) {
+                        String event = Utils.getProperty(messageJsonElement, Literals.event.name());
+                        String payloadString = messageJsonElement.getAsJsonObject().get(Literals.payload.name()).getAsString();
+                        if (Literals.notification.name().equals(event)) {
+                            System.out.format("%s", Utils.SYMBOL_SPEAKER);
                         }
-                    } else {
-                        System.out.format("Payload is blank.\n");
+                        if (Utils.isNotBlank(payloadString)) {
+                            JsonElement payloadJsonElement = JsonParser.parseString(payloadString);
+                            if (Utils.isJsonObject(payloadJsonElement)) {
+                                System.out.format("%s\n", payloadJsonElement);
+                                handleMessage(payloadJsonElement);
+                            }
+                        } else {
+                            System.out.format("Payload is blank.\n");
+                        }
                     }
+                    sb = new StringBuilder();
                 }
-                sb = new StringBuilder();
             } else {
                 sb.append(data);
             }

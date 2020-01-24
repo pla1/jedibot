@@ -1,6 +1,6 @@
 package social.pla.jedibot;
 
-public class FediverseInstance {
+public class Application {
     private String applicationId;
     private String clientId;
     private String clientSecret;
@@ -9,6 +9,33 @@ public class FediverseInstance {
     private int id;
     private String instanceName;
     private String user;
+    private boolean found= false;
+    private String accessToken;
+    private String refreshToken;
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
+    }
+
+    public boolean isFound() {
+        return found;
+    }
+
+    public void setFound(boolean found) {
+        this.found = found;
+    }
 
     public String getApplicationId() {
         return applicationId;

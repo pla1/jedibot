@@ -7,6 +7,7 @@ import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.Clip;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.net.*;
 import java.net.http.HttpClient;
@@ -19,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.time.zone.ZoneRulesProvider;
 import java.util.*;
 
@@ -31,9 +33,13 @@ public class Utils {
 
 
     public static void main(String[] args) throws Exception {
-        JsonObject settings = getSettings();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         if (true) {
+            Utils.printTable("subscriber");
+            System.exit(0
+            );
+        }
+        if (false) {
             Connection connection = Utils.getConnection();
             Utils.close(connection);
             System.exit(0);
@@ -56,36 +62,7 @@ public class Utils {
             System.exit(0);
 
         }
-        if (false) {
-            System.out.format("%s\n", Utils.SYMBOL_THINKING);
-            System.out.format("%s\n", gson.toJson(settings));
-            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
-        }
-        if (false) {
-            NasaDAO nasaDAO = new NasaDAO();
-            File imageFile = Utils.downloadImage(settings.get(Main.Literals.nasaImageOfTheDay.name()).getAsJsonObject().get(Main.Literals.photoUrl.name()).getAsString());
-            System.out.format("%s\n", imageFile.getAbsolutePath());
-            JsonObject nasaImageOfTheDay = nasaDAO.getLatestImageOfTheDay();
-            JsonObject uploadedJo = Utils.uploadMedia(imageFile);
-            ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
-            mediaArrayList.add(uploadedJo);
-            nasaImageOfTheDay.add(Main.Literals.nasaImageUpload.name(), uploadedJo);
-            settings.add(Main.Literals.nasaImageOfTheDay.name(), nasaImageOfTheDay);
-            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
-        }
-        if (false) {
-            HprDAO hprDAO = new HprDAO();
-            JsonObject hprLatestEpisode = hprDAO.getLatestEpisode();
-            settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
-            File audioFile = Utils.downloadAudio(settings.get(Main.Literals.hprLatestEpisode.name()).getAsJsonObject().get(Main.Literals.audioUrl.name()).getAsString());
-            System.out.format("%s\n", audioFile.getAbsolutePath());
-            JsonObject uploadedJo = Utils.uploadMedia(audioFile);
-            ArrayList<JsonElement> mediaArrayList = new ArrayList<>();
-            mediaArrayList.add(uploadedJo);
-            hprLatestEpisode.add(Main.Literals.hprEpisodeUpload.name(), uploadedJo);
-            settings.add(Main.Literals.hprLatestEpisode.name(), hprLatestEpisode);
-            Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
-        }
+
         System.exit(0);
     }
 
@@ -119,6 +96,32 @@ public class Utils {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public static String getFullDateAndTime(Timestamp timestamp) {
+        java.util.Date date = (java.util.Date) timestamp;
+        SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd, yyyy hh:mm:ss a");
+        return sdf.format(timestamp);
+    }
+
+    public static long getLong(Timestamp timestamp) {
+        if (timestamp == null) {
+            return 0;
+        }
+        return timestamp.getTime();
+    }
+
+    public static void dropTableIfExists(Connection connection, String tableName) {
+        Statement statement = null;
+        try {
+            statement = connection.createStatement();
+            statement.execute(String.format("drop table %s", tableName));
+            System.out.format("Table %s dropped.\n", tableName);
+        } catch (Exception e) {
+            System.out.format("Table \"%s\" not dropped. %s.\n", tableName, e.getLocalizedMessage());
+        } finally {
+            Utils.close(statement);
+        }
     }
 
     public static URL getRedirect(URL url) throws IOException {
@@ -156,6 +159,34 @@ public class Utils {
         return "";
     }
 
+    public static void printTable(String tableName) {
+        Connection connection = null;
+        Statement statement = null;
+        ResultSet rs;
+        try {
+            connection = Utils.getConnection();
+            statement = connection.createStatement();
+            rs = statement.executeQuery(String.format("select * from %s", tableName));
+            ResultSetMetaData rsmd = rs.getMetaData();
+            int columnCount = rsmd.getColumnCount();
+            for (int i = 1; i <= columnCount; i++) {
+                String columnName = rsmd.getColumnName(i);
+                String columnType = rsmd.getColumnTypeName(i);
+                System.out.format("%s %s\n", columnName, columnType);
+            }
+            while (rs.next()) {
+                for (int i = 1; i <= columnCount; i++) {
+                  System.out.format("%s\t", rs.getString(i));
+                }
+                System.out.format("\n");
+            }
+        } catch (Exception e) {
+            System.out.format("Table \"%s\" not dropped. %s.\n", tableName, e.getLocalizedMessage());
+        } finally {
+            Utils.close(statement);
+        }
+    }
+
     public static String listZoneIds() {
         StringBuilder sb = new StringBuilder();
         Set<String> list = ZoneRulesProvider.getAvailableZoneIds();
@@ -166,6 +197,35 @@ public class Utils {
             sb.append(zoneId).append("\n");
         }
         return sb.toString();
+    }
+
+    public static File downloadMedia(String urlString) {
+        OutputStream outputStream = null;
+        int position = urlString.lastIndexOf(".");
+        String fileSuffix = "UNKNOWN";
+        if (position > 0) {
+            fileSuffix = urlString.substring(position);
+        }
+        try {
+            URL url = getRedirect(new URL(urlString));
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.setInstanceFollowRedirects(true);
+            InputStream inputStream = urlConnection.getInputStream();
+            File outputFile = File.createTempFile("media_download_", fileSuffix);
+            outputStream = new FileOutputStream(outputFile);
+            byte[] buffer = new byte[4096];
+            int length;
+            while ((length = inputStream.read(buffer)) > 0) {
+                outputStream.write(buffer, 0, length);
+            }
+            System.out.format("Downloaded %s to %s.\n", urlString, outputFile.getAbsolutePath());
+            return outputFile;
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            close(outputStream);
+        }
+        return null;
     }
 
     public static File downloadAudio(String urlString) {
@@ -220,8 +280,9 @@ public class Utils {
     }
 
     public static JsonObject uploadMedia(File file) {
-        JsonObject settings = getSettings();
-        String urlString = String.format("https://%s/api/v1/media", Utils.getProperty(settings, Main.Literals.instance.name()));
+        ApplicationDAO applicationDAO = new ApplicationDAO();
+        Application application = applicationDAO.get(1);
+        String urlString = String.format("https://%s/api/v1/media", application.getInstanceName());
         System.out.format("Upload image %s\n", urlString);
         if (!file.exists()) {
             System.out.format("File: \"%s\" does not exist.\n", file.getAbsolutePath());
@@ -229,7 +290,7 @@ public class Utils {
         }
         HttpClient client = HttpClient.newBuilder().build();
         Map<Object, Object> data = new LinkedHashMap<>();
-        data.put(Main.Literals.access_token.name(), Utils.getProperty(settings, Main.Literals.access_token.name()));
+        data.put(Main.Literals.access_token.name(), application.getAccessToken());
         data.put(Main.Literals.description.name(), String.format("%s uploaded by JediBot.", file.getAbsolutePath()));
         data.put(Main.Literals.file.name(), Paths.get(file.getAbsolutePath()));
         String boundary = new BigInteger(256, new Random()).toString();
@@ -285,25 +346,6 @@ public class Utils {
         }
     }
 
-    public synchronized static JsonObject getSettings() {
-        String settingsFileName = getSettingsFileName();
-        FileInputStream fis = null;
-        File propertyFile = new File(settingsFileName);
-        if (!propertyFile.exists()) {
-            return null;
-        }
-        try {
-            fis = new FileInputStream(propertyFile);
-            InputStreamReader isr = new InputStreamReader(fis);
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            return gson.fromJson(isr, JsonObject.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            Utils.close(fis);
-        }
-        return null;
-    }
 
     public static Connection getConnection() throws SQLException, ClassNotFoundException {
         String fileName = "/etc/social.pla.jedibot.properties";
@@ -470,10 +512,6 @@ public class Utils {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
-    public static boolean writeSettings(JsonObject settings) {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        return Utils.write(Utils.getSettingsFileName(), gson.toJson(settings));
-    }
 
     public static boolean write(String outputFileName, String text) {
         File file = new File(outputFileName);
@@ -523,10 +561,6 @@ public class Utils {
         return classNames.toString();
     }
 
-    public static String getSettingsFileName() {
-        return String.format("%s%s.jedibot.json", System.getProperty("user.home"), File.separator);
-    }
-
 
     public static String ping(String ipAddress) {
         int timeoutSeconds = 3;
@@ -557,4 +591,34 @@ public class Utils {
         }
         return output.toString();
     }
+
+    public static String toString(Object object) {
+        Class thisClass = object.getClass();
+        Method[] methods = thisClass.getMethods();
+        ArrayList<Pair> arrayList = new ArrayList<>();
+        for (int i = 0; i < methods.length; i++) {
+            String methodName = methods[i].getName();
+            if (methodName.startsWith("get") || methodName.startsWith("is")) {
+                String label = methodName;
+                String value = null;
+                try {
+                    value = methods[i].invoke(object).toString();
+                } catch (Exception e) {
+                }
+                arrayList.add(new Pair(label, value));
+            }
+        }
+        Collections.sort(arrayList);
+        StringBuilder sb = new StringBuilder(256);
+        sb.append(thisClass.getName());
+        sb.append("\n");
+        for (Pair pair : arrayList) {
+            sb.append(pair.getName());
+            sb.append(" = ");
+            sb.append(pair.getValue());
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
 }
