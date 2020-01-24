@@ -3,21 +3,37 @@ package social.pla.jedibot;
 import java.sql.*;
 import java.util.ArrayList;
 
-public class SubscriberDAO {
-    private final String SQL_CREATE_TABLE = "create table subscriber (" +
+public class SubscriptionDAO {
+    private final String SQL_CREATE_TABLE = "create table subscription (" +
             "id int generated always as identity, " +
             "user_name varchar(1024), " +
             "feed_id int, " +
             "log_time timestamp, " +
-            "primary key (id) " +
+            "primary key (feed_id, user_name), " +
+            "constraint feed_fk " +
+            "foreign key (feed_id) " +
+            "references feed (id) " +
+            "ON DELETE CASCADE ON UPDATE RESTRICT " +
             ")";
 
     public static void main(String[] args) {
-        SubscriberDAO dao = new SubscriberDAO();
-        if (false) {
+        SubscriptionDAO dao = new SubscriptionDAO();
+        if (true) {
             dao.createTable();
         }
-
+        if (false) {
+            Feed feed = new Feed();
+            feed.setId(1);
+            dao.add(feed, "pla");
+            ArrayList<Subscription> list = dao.getByFeedId(1);
+            System.out.format("%d subscriptions\n", list.size());
+            FeedDAO feedDAO = new FeedDAO();
+            feed = feedDAO.get("hpr");
+            System.out.println(Utils.toString(feed));
+            feedDAO.delete(feed);
+            list = dao.getByFeedId(1);
+            System.out.format("%d subscriptions\n", list.size());
+        }
         System.exit(0);
     }
 
@@ -27,7 +43,7 @@ public class SubscriberDAO {
         try {
             connection = Utils.getConnection();
             statement = connection.createStatement();
-            Utils.dropTableIfExists(connection, "subscriber");
+            Utils.dropTableIfExists(connection, "subscription");
             statement.execute(SQL_CREATE_TABLE);
         } catch (Exception e) {
             e.printStackTrace();
@@ -36,14 +52,14 @@ public class SubscriberDAO {
         }
     }
 
-    public Subscriber get(Feed feed, String user) {
+    public Subscription get(Feed feed, String user) {
         Connection connection = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
-        Subscriber subscriber = new Subscriber();
+        Subscription subscription = new Subscription();
         try {
             connection = Utils.getConnection();
-            ps = connection.prepareStatement("select * from subscriber where user_name = ? and feed_id = ?");
+            ps = connection.prepareStatement("select * from subscription where user_name = ? and feed_id = ?");
             int i = 1;
             ps.setString(i++, user);
             ps.setInt(i++, feed.getId());
@@ -57,17 +73,17 @@ public class SubscriberDAO {
         } finally {
             Utils.close(rs, ps, connection);
         }
-        return subscriber;
+        return subscription;
     }
 
-    public Subscriber add(Feed feed, String user) {
+    public Subscription add(Feed feed, String user) {
         Connection connection = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
-        Subscriber subscriber = new Subscriber();
+        Subscription subscription = new Subscription();
         try {
             connection = Utils.getConnection();
-            ps = connection.prepareStatement("insert into subscriber " +
+            ps = connection.prepareStatement("insert into subscription " +
                     "(user_name, feed_id, log_time) " +
                     "values(?,?,current_timestamp) ", PreparedStatement.RETURN_GENERATED_KEYS);
             int i = 1;
@@ -84,21 +100,21 @@ public class SubscriberDAO {
         } finally {
             Utils.close(rs, ps, connection);
         }
-        return subscriber;
+        return subscription;
     }
 
     public boolean delete(Feed feed, String user) {
         Connection connection = null;
         PreparedStatement ps = null;
-        Subscriber subscriber = new Subscriber();
+        Subscription subscription = new Subscription();
         try {
             connection = Utils.getConnection();
-            ps = connection.prepareStatement("delete from subscriber where  user_name = ? and feed_id = ?");
+            ps = connection.prepareStatement("delete from subscription where  user_name = ? and feed_id = ?");
             int i = 1;
             ps.setString(i++, user);
             ps.setInt(i++, feed.getId());
             int rowsDeleted = ps.executeUpdate();
-            System.out.format("Subscriber rows deleted: %d for user %s feed id: %d\n", rowsDeleted, user, feed.getId());
+            System.out.format("Subscription rows deleted: %d for user %s feed id: %d\n", rowsDeleted, user, feed.getId());
             return rowsDeleted == 1;
         } catch (Exception e) {
             e.printStackTrace();
@@ -108,48 +124,47 @@ public class SubscriberDAO {
         return false;
     }
 
-    private Subscriber transfer(ResultSet rs) throws SQLException {
-        Subscriber subscriber = new Subscriber();
-        subscriber.setFeedId(rs.getInt("feed_id"));
-        subscriber.setFound(true);
-        subscriber.setId(rs.getInt("id"));
-        subscriber.setUser(rs.getString("user_name"));
+    private Subscription transfer(ResultSet rs) throws SQLException {
+        Subscription subscription = new Subscription();
+        subscription.setFeedId(rs.getInt("feed_id"));
+        subscription.setFound(true);
+        subscription.setId(rs.getInt("id"));
+        subscription.setUser(rs.getString("user_name"));
         Timestamp timestamp = rs.getTimestamp("log_time");
-        subscriber.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
-        subscriber.setLogTimeMilliseconds(Utils.getLong(timestamp));
-        return subscriber;
+        subscription.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
+        subscription.setLogTimeMilliseconds(Utils.getLong(timestamp));
+        return subscription;
     }
 
-    public ArrayList<Subscriber> getByFeedId(int feedId) {
-        ArrayList<Subscriber> subscribers = new ArrayList<>();
+    public ArrayList<Subscription> getByFeedId(int feedId) {
+        ArrayList<Subscription> subscriptions = new ArrayList<>();
         Connection connection = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
             connection = Utils.getConnection();
-            ps = connection.prepareStatement("select * from subscriber where feed_id = ?");
+            ps = connection.prepareStatement("select * from subscription where feed_id = ?");
             ps.setInt(1, feedId);
             rs = ps.executeQuery();
             while (rs.next()) {
-                subscribers.add(transfer(rs));
+                subscriptions.add(transfer(rs));
             }
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             Utils.close(rs, ps, connection);
         }
-        return subscribers;
+        return subscriptions;
     }
 
 
-
-    public Subscriber get(int id) {
+    public Subscription get(int id) {
         Connection connection = null;
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
             connection = Utils.getConnection();
-            ps = connection.prepareStatement("select * from subscriber where id = ?");
+            ps = connection.prepareStatement("select * from subscription where id = ?");
             ps.setInt(1, id);
             rs = ps.executeQuery();
             if (rs.next()) {
@@ -160,7 +175,7 @@ public class SubscriberDAO {
         } finally {
             Utils.close(rs, ps, connection);
         }
-        return new Subscriber();
+        return new Subscription();
     }
 
 }

@@ -34,7 +34,7 @@ public class Main {
     private final long MINUTES_RSS_FEED_INTERVAL = 30;
     private final long ZERO_INITIAL_DELAY = 0;
     private final FeedDAO feedDAO = new FeedDAO();
-    private final SubscriberDAO subscriberDAO = new SubscriberDAO();
+    private final SubscriptionDAO subscriptionDAO = new SubscriptionDAO();
     private final ApplicationDAO applicationDAO = new ApplicationDAO();
     private final String TAG = this.getClass().getCanonicalName();
 
@@ -293,10 +293,15 @@ public class Main {
                 if (!urlString.startsWith("http")) {
                     output = String.format("%s should start with http. %s - Example: add feed https://xkcd.com/atom.xml xkcd", urlString, Utils.SYMBOL_THINKING);
                 } else {
-                    Feed feed = feedDAO.add(urlString, label);
-                    output = String.format("Feed added to table: %s. Will update the feed next.", feed.isFound());
-                    WorkerRssFeeds worker = new WorkerRssFeeds();
-                    worker.start();
+                    Feed feed = feedDAO.get(urlString, label);
+                    if (feed.isFound()) {
+                        output = String.format("Feed already exists with URL: %s and label: %s.", urlString, label);
+                    } else {
+                        feed = feedDAO.add(urlString, label);
+                        output = String.format("Feed added to table: %s. Will update the feed next.", feed.isFound());
+                        WorkerRssFeeds worker = new WorkerRssFeeds();
+                        worker.start();
+                    }
                 }
             }
         }
@@ -312,7 +317,7 @@ public class Main {
             if ("subscriptions".equals(text)) {
                 ArrayList<Feed> feeds = feedDAO.getFromUser(accountName);
                 if (feeds.isEmpty()) {
-                    output = "%s isn't subscribed to any feeds. Try something like: subscribe xkcd";
+                    output = String.format("%s isn't subscribed to any feeds. Try something like: subscribe xkcd", accountName);
                 } else {
                     StringBuilder sb = new StringBuilder();
                     sb.append("You are subscribed to: ");
@@ -341,12 +346,12 @@ public class Main {
             if ("subscribe".equalsIgnoreCase(words[0])) {
                 Feed feed = feedDAO.get(words[1]);
                 if (feed.isFound()) {
-                    Subscriber subscriber = subscriberDAO.get(feed, accountName);
-                    if (subscriber.isFound()) {
+                    Subscription subscription = subscriptionDAO.get(feed, accountName);
+                    if (subscription.isFound()) {
                         output = String.format("You are already subscribed to %s.", words[1]);
                     } else {
-                        subscriber = subscriberDAO.add(feed, accountName);
-                        if (subscriber.isFound()) {
+                        subscription = subscriptionDAO.add(feed, accountName);
+                        if (subscription.isFound()) {
                             output = String.format("You are now subscribed to %s", words[1]);
                         } else {
                             output = String.format("Subscription to %s failed.", words[1]);
@@ -359,11 +364,11 @@ public class Main {
             if ("unsubscribe".equalsIgnoreCase(words[0])) {
                 Feed feed = feedDAO.get(words[1]);
                 if (feed.isFound()) {
-                    Subscriber subscriber = subscriberDAO.get(feed, accountName);
-                    if (!subscriber.isFound()) {
+                    Subscription subscription = subscriptionDAO.get(feed, accountName);
+                    if (!subscription.isFound()) {
                         output = String.format("You are not subscribed to %s.", words[1]);
                     } else {
-                        boolean deleted = subscriberDAO.delete(feed, accountName);
+                        boolean deleted = subscriptionDAO.delete(feed, accountName);
                         if (deleted) {
                             output = String.format("You have been unsubscribed from %s.", words[1]);
                         } else {

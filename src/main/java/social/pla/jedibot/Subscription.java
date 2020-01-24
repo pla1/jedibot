@@ -1,6 +1,6 @@
 package social.pla.jedibot;
 
-public class Subscriber {
+public class Subscription {
     private int id;
     private String user;
     private int feedId;

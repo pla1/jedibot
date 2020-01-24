@@ -35,7 +35,7 @@ public class Utils {
     public static void main(String[] args) throws Exception {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         if (true) {
-            Utils.printTable("subscriber");
+            Utils.printTable("subscription");
             System.exit(0
             );
         }

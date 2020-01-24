@@ -25,6 +25,7 @@ public class ApplicationDAO {
         ApplicationDAO dao = new ApplicationDAO();
         if (false) {
             dao.createTable();
+            System.exit(0);
         }
         Application application = dao.get(1);
         System.out.println(Utils.toString(application));

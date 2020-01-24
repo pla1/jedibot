@@ -23,12 +23,34 @@ public class FeedDAO {
             "uploaded_media_url varchar(2056), " + "uploaded_media_id varchar(256), " +
             "updated varchar(50), " +
             "log_time timestamp, " +
-            "primary key (id) " +
+            "primary key (id), " +
+            "constraint label_uc unique (label) " +
             ")";
 
     public static void main(String[] args) {
         FeedDAO dao = new FeedDAO();
+        if (false) {
+            Feed feed = dao.get("LibreLounge");
+            boolean deleted = dao.delete(feed);
+            System.out.format("%s deleted %s\n", feed.getLabel(), deleted);
+            System.exit(0);
+        }
+        if (false) {
+            String[] labels = {"nasa"};
+            for (String label : labels) {
+                Feed feed = dao.get(label);
+                if (feed.isFound()) {
+                    dao.populateWithLatestRssEntry(feed);
+                    System.out.println(Utils.toString(feed));
+                }
+            }
+            System.exit(0);
+        }
         if (true) {
+            dao.createTable();
+            System.exit(0);
+        }
+        if (false) {
             String user = "pla";
             ArrayList<Feed> list = dao.getFromUser(user);
             for (Feed feed : list) {
@@ -37,7 +59,7 @@ public class FeedDAO {
             System.out.format("%d feeds for %s\n", list.size(), user);
             System.exit(0);
         }
-        if (false) {
+        if (true) {
             ArrayList<Feed> list = dao.get();
             for (Feed feed : list) {
                 System.out.println(Utils.toString(feed));
@@ -59,11 +81,11 @@ public class FeedDAO {
             dao.add("https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss", Main.Literals.nasa.name());
             System.exit(0);
         }
-        if (true) {
+        if (false) {
             ArrayList<Feed> list = dao.get();
             for (Feed feed : list) {
                 feed = dao.populateWithLatestRssEntry(feed);
-                dao.uploadMedia(feed);
+                //  dao.uploadMedia(feed);
                 System.out.println(Utils.toString(feed));
             }
             System.out.format("%d feeds\n", list.size());
@@ -89,6 +111,7 @@ public class FeedDAO {
         try {
             connection = Utils.getConnection();
             statement = connection.createStatement();
+            Utils.dropTableIfExists(connection, "subscription");
             Utils.dropTableIfExists(connection, "feed");
             statement.execute(SQL_CREATE_TABLE);
         } catch (Exception e) {
@@ -150,7 +173,8 @@ public class FeedDAO {
                     "media_url = ?, " +
                     "uploaded_media_id = ?, " +
                     "uploaded_media_url = ?, " +
-                    "title = ? " +
+                    "title = ?, " +
+                    "updated = ? " +
                     "where id = ?");
             int i = 1;
             ps.setString(i++, feed.getUrl());
@@ -160,6 +184,7 @@ public class FeedDAO {
             ps.setString(i++, feed.getUploadedMedialId());
             ps.setString(i++, feed.getUploadedMedialUrl());
             ps.setString(i++, feed.getTitle());
+            ps.setString(i++, feed.getUpdated());
             ps.setInt(i++, feed.getId());
             int rowsUpdated = ps.executeUpdate();
             System.out.format("%d rows updated for feed: %s\n", rowsUpdated, feed);
@@ -171,12 +196,38 @@ public class FeedDAO {
         return feed;
     }
 
+    public boolean delete(Feed feed) {
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+            connection = Utils.getConnection();
+            ps = connection.prepareStatement("delete from feed where id = ?");
+            ps.setInt(1, feed.getId());
+            int feedsDeleted = ps.executeUpdate();
+            Utils.close(ps);
+            /*
+            ps = connection.prepareStatement("delete from subscription where feed_id = ?");
+            ps.setInt(1, feed.getId());
+            int subscriptionsDeleted = ps.executeUpdate();
+            System.out.format("%d feed rows deleted and %d subscriptions deleted for feed: %s\n",
+                    feedsDeleted, subscriptionsDeleted, feed);
+
+             */
+            return feedsDeleted == 1;
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            Utils.close(ps, connection);
+        }
+        return false;
+    }
+
 
     public Feed populateWithLatestRssEntry(Feed feed) {
         try {
             Document document = Jsoup.connect(feed.getUrl())
                     .parser(Parser.xmlParser())
-                    .timeout(1000 * 3)
+                    .timeout(1000 * 5)
                     .get();
             Elements elements = document.getElementsByTag(Main.Literals.entry.name());
             if (elements.size() == 0) {
@@ -193,7 +244,7 @@ public class FeedDAO {
                 html = html.replace("<![CDATA[", "");
                 html = html.replace("]]>", "");
                 String text = Jsoup.parse(html).text();
-            //    System.out.format("Node name: %s value: %s\n", nodeName, text);
+        //        System.out.format("Node name: %s\ntext: %s\nhtml: %s\n", nodeName, text, html);
                 if (Main.Literals.title.name().equals(nodeName)) {
                     feed.setTitle(text);
                 }
@@ -206,8 +257,19 @@ public class FeedDAO {
                     feed.setUpdated(text);
                 }
                 if (Main.Literals.link.name().equals(nodeName)) {
-                    String link = child.attr("href");
-                    feed.setMediaUrl(link);
+                    if (child.hasAttr("href")) {
+                        String link = child.attr("href");
+                        feed.setMediaUrl(link);
+                    }
+                    if (child.hasAttr("rel")) {
+                        if (child.hasAttr("enclosure")) {
+                            if (child.hasAttr("type")) {
+                                if (child.attr("type").startsWith("audio")) {
+                                    feed.setMediaUrl(child.attr("href"));
+                                }
+                            }
+                        }
+                    }
                 }
                 if (Main.Literals.enclosure.name().equals(nodeName)) {
                     String mediaUrl = child.attr("url");
@@ -216,10 +278,14 @@ public class FeedDAO {
                 if (Main.Literals.summary.name().equals(nodeName)) {
                     Document docSummary = Jsoup.parse(text);
                     Element imageElement = docSummary.select("img").first();
-                    String url = imageElement.attr("src");
-                    feed.setMediaUrl(url);
-                    String description = imageElement.attr("title");
-                    feed.setDescription(description);
+                    if (imageElement != null) {
+                        String url = imageElement.attr("src");
+                        feed.setMediaUrl(url);
+                        String description = imageElement.attr("title");
+                        feed.setDescription(description);
+                    } else {
+                        feed.setDescription(Jsoup.parse(text).text());
+                    }
                 }
             }
             if (feed.getMediaUrl().contains("youtube.com")) {
@@ -240,7 +306,7 @@ public class FeedDAO {
         try {
             connection = Utils.getConnection();
             ps = connection.prepareStatement("select b.* " +
-                    "from subscriber as a " +
+                    "from subscription as a " +
                     "join feed as b " +
                     "on a.feed_id = b.id " +
                     "where user_name = ? " +
@@ -257,6 +323,7 @@ public class FeedDAO {
         }
         return feeds;
     }
+
     public ArrayList<Feed> get() {
         ArrayList<Feed> list = new ArrayList<>();
         Connection connection = null;
@@ -287,7 +354,7 @@ public class FeedDAO {
         feed.setUploadedMedialUrl(rs.getString("uploaded_media_url"));
         feed.setMediaUrl(rs.getString("media_url"));
         feed.setTitle(rs.getString(Main.Literals.title.name()));
-        feed.setUpdated(Main.Literals.updated.name());
+        feed.setUpdated(rs.getString(Main.Literals.updated.name()));
         Timestamp timestamp = rs.getTimestamp("log_time");
         feed.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
         feed.setLogTimeMilliseconds(Utils.getLong(timestamp));
