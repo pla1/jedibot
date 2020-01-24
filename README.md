@@ -1,4 +1,4 @@
 # Fediverse bot written in Java. 
 @bot@pla.social
 
-See help.txt file for commands it responds to. 
+Send a post to @bot@pla.social with the word `help` for a list of commands this bot responds to.  
