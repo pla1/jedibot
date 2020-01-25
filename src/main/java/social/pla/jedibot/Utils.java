@@ -174,12 +174,15 @@ public class Utils {
                 String columnType = rsmd.getColumnTypeName(i);
                 System.out.format("%s %s\n", columnName, columnType);
             }
+            int quantity = 0;
             while (rs.next()) {
                 for (int i = 1; i <= columnCount; i++) {
                   System.out.format("%s\t", rs.getString(i));
                 }
                 System.out.format("\n");
+                quantity++;
             }
+            System.out.format("%d rows in table %s\n", quantity, tableName);
         } catch (Exception e) {
             System.out.format("Table \"%s\" not dropped. %s.\n", tableName, e.getLocalizedMessage());
         } finally {

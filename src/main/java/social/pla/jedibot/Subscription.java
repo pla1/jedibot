@@ -1,35 +1,20 @@
 package social.pla.jedibot;
 
 public class Subscription {
-    private int id;
-    private String user;
+
     private int feedId;
     private boolean found = false;
-    private long logTimeMilliseconds;
+    private int id;
     private String logTimeDisplay;
+    private long logTimeMilliseconds;
+    private String user;
 
-    public boolean isFound() {
-        return found;
+    public int getFeedId() {
+        return feedId;
     }
 
-    public void setFound(boolean found) {
-        this.found = found;
-    }
-
-    public long getLogTimeMilliseconds() {
-        return logTimeMilliseconds;
-    }
-
-    public void setLogTimeMilliseconds(long logTimeMilliseconds) {
-        this.logTimeMilliseconds = logTimeMilliseconds;
-    }
-
-    public String getLogTimeDisplay() {
-        return logTimeDisplay;
-    }
-
-    public void setLogTimeDisplay(String logTimeDisplay) {
-        this.logTimeDisplay = logTimeDisplay;
+    public void setFeedId(int feedId) {
+        this.feedId = feedId;
     }
 
     public int getId() {
@@ -40,6 +25,22 @@ public class Subscription {
         this.id = id;
     }
 
+    public String getLogTimeDisplay() {
+        return logTimeDisplay;
+    }
+
+    public void setLogTimeDisplay(String logTimeDisplay) {
+        this.logTimeDisplay = logTimeDisplay;
+    }
+
+    public long getLogTimeMilliseconds() {
+        return logTimeMilliseconds;
+    }
+
+    public void setLogTimeMilliseconds(long logTimeMilliseconds) {
+        this.logTimeMilliseconds = logTimeMilliseconds;
+    }
+
     public String getUser() {
         return user;
     }
@@ -48,11 +49,11 @@ public class Subscription {
         this.user = user;
     }
 
-    public int getFeedId() {
-        return feedId;
+    public boolean isFound() {
+        return found;
     }
 
-    public void setFeedId(int feedId) {
-        this.feedId = feedId;
+    public void setFound(boolean found) {
+        this.found = found;
     }
 }

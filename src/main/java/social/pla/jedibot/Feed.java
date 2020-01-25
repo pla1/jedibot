@@ -1,94 +1,44 @@
 package social.pla.jedibot;
 
 public class Feed {
-    private int id;
-    private String url;
+    private String channelDescription;
+    private String channelTitle;
+    private String channelUrl;
+    private String description;
     private boolean found = false;
-    private String title;
-    private String description ;
-    private String uploadedMedialUrl;
-    private String uploadedMedialId;
-    private String mediaUrl;
+    private int id;
     private String label;
-    private long logTimeMilliseconds;
     private String logTimeDisplay;
+    private long logTimeMilliseconds;
+    private String mediaUrl;
+    private String title;
     private String updated;
+    private String uploadedMedialId;
+    private String uploadedMedialUrl;
+    private String url;
 
-    public String toString() {
-        return String.format("%d %s %s %s %s %s %s %s", id, label, url, title, mediaUrl, uploadedMedialId, uploadedMedialUrl, description);
+    public String getChannelDescription() {
+        return channelDescription;
     }
 
-    public String getUploadedMedialUrl() {
-        return uploadedMedialUrl;
+    public void setChannelDescription(String channelDescription) {
+        this.channelDescription = channelDescription;
     }
 
-    public void setUploadedMedialUrl(String uploadedMedialUrl) {
-        this.uploadedMedialUrl = uploadedMedialUrl;
+    public String getChannelTitle() {
+        return channelTitle;
     }
 
-    public String getUploadedMedialId() {
-        return uploadedMedialId;
+    public void setChannelTitle(String channelTitle) {
+        this.channelTitle = channelTitle;
     }
 
-    public void setUploadedMedialId(String uploadedMedialId) {
-        this.uploadedMedialId = uploadedMedialId;
+    public String getChannelUrl() {
+        return channelUrl;
     }
 
-    public String getMediaUrl() {
-        return mediaUrl;
-    }
-
-    public void setMediaUrl(String mediaUrl) {
-        this.mediaUrl = mediaUrl;
-    }
-
-    public long getLogTimeMilliseconds() {
-        return logTimeMilliseconds;
-    }
-
-    public void setLogTimeMilliseconds(long logTimeMilliseconds) {
-        this.logTimeMilliseconds = logTimeMilliseconds;
-    }
-
-    public String getLogTimeDisplay() {
-        return logTimeDisplay;
-    }
-
-    public void setLogTimeDisplay(String logTimeDisplay) {
-        this.logTimeDisplay = logTimeDisplay;
-    }
-
-    public String getUpdated() {
-        return updated;
-    }
-
-    public void setUpdated(String updated) {
-        this.updated = updated;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
-    public void setLabel(String label) {
-        this.label = label;
-    }
-
-    public boolean isFound() {
-        return found;
-    }
-
-    public void setFound(boolean found) {
-        this.found = found;
-    }
-
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
+    public void setChannelUrl(String channelUrl) {
+        this.channelUrl = channelUrl;
     }
 
     public String getDescription() {
@@ -107,6 +57,69 @@ public class Feed {
         this.id = id;
     }
 
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
+    public String getLogTimeDisplay() {
+        return logTimeDisplay;
+    }
+
+    public void setLogTimeDisplay(String logTimeDisplay) {
+        this.logTimeDisplay = logTimeDisplay;
+    }
+
+    public long getLogTimeMilliseconds() {
+        return logTimeMilliseconds;
+    }
+
+    public void setLogTimeMilliseconds(long logTimeMilliseconds) {
+        this.logTimeMilliseconds = logTimeMilliseconds;
+    }
+
+    public String getMediaUrl() {
+        return mediaUrl;
+    }
+
+    public void setMediaUrl(String mediaUrl) {
+        this.mediaUrl = mediaUrl;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getUpdated() {
+        return updated;
+    }
+
+    public void setUpdated(String updated) {
+        this.updated = updated;
+    }
+
+    public String getUploadedMedialId() {
+        return uploadedMedialId;
+    }
+
+    public void setUploadedMedialId(String uploadedMedialId) {
+        this.uploadedMedialId = uploadedMedialId;
+    }
+
+    public String getUploadedMedialUrl() {
+        return uploadedMedialUrl;
+    }
+
+    public void setUploadedMedialUrl(String uploadedMedialUrl) {
+        this.uploadedMedialUrl = uploadedMedialUrl;
+    }
 
     public String getUrl() {
         return url;
@@ -114,5 +127,17 @@ public class Feed {
 
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    public boolean isFound() {
+        return found;
+    }
+
+    public void setFound(boolean found) {
+        this.found = found;
+    }
+
+    public String toString() {
+        return String.format("%d %s %s %s %s %s %s %s", id, label, url, title, mediaUrl, uploadedMedialId, uploadedMedialUrl, description);
     }
 }

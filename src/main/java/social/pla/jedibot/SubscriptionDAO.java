@@ -96,7 +96,7 @@ public class SubscriptionDAO {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.format("%s\n", e.getLocalizedMessage());
         } finally {
             Utils.close(rs, ps, connection);
         }

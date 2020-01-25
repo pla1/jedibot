@@ -1,6 +1,9 @@
 package social.pla.jedibot;
 
 import com.google.gson.JsonObject;
+import com.rometools.rome.feed.synd.SyndFeed;
+import com.rometools.rome.io.SyndFeedInput;
+import com.rometools.rome.io.XmlReader;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -9,12 +12,16 @@ import org.jsoup.select.Elements;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.sql.*;
 import java.util.ArrayList;
 
 public class FeedDAO {
     private final String SQL_CREATE_TABLE = "create table feed (" +
             "id int generated always as identity, " +
+            "channel_title varchar(1024), " +
+            "channel_description varchar(2056), " +
+            "channel_url varchar(2056), " +
             "url varchar(2056), " +
             "label varchar(256), " +
             "title varchar(1024), " +
@@ -46,7 +53,7 @@ public class FeedDAO {
             }
             System.exit(0);
         }
-        if (true) {
+        if (false) {
             dao.createTable();
             System.exit(0);
         }
@@ -59,7 +66,7 @@ public class FeedDAO {
             System.out.format("%d feeds for %s\n", list.size(), user);
             System.exit(0);
         }
-        if (true) {
+        if (false) {
             ArrayList<Feed> list = dao.get();
             for (Feed feed : list) {
                 System.out.println(Utils.toString(feed));
@@ -67,18 +74,21 @@ public class FeedDAO {
             System.out.format("%d feeds\n", list.size());
             System.exit(0);
         }
-        if (false) {
-            Feed feed = new Feed();
-            feed.setUrl("https://www.youtube.com/feeds/videos.xml?channel_id=UCV9WtB_q5sJfe3Rev5PWy-Q");
-            feed = dao.populateWithLatestRssEntry(feed);
-            System.out.println(Utils.toString(feed));
-            System.exit(0);
-        }
-        if (false) {
-            dao.createTable();
-            dao.add("http://hackerpublicradio.org/hpr_rss.php", Main.Literals.hpr.name());
-            dao.add("https://xkcd.com/atom.xml", Main.Literals.xkcd.name());
-            dao.add("https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss", Main.Literals.nasa.name());
+        if (true) {
+
+            String[] urlStrings = {"https://www.youtube.com/feeds/videos.xml?channel_id=UCV9WtB_q5sJfe3Rev5PWy-Q",
+                    "https://www.nasa.gov/rss/dyn/Houston-We-Have-a-Podcast.rss",
+                    "https://xkcd.com/atom.xml",
+                    "https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss",
+                    "http://www.androidbuffet.com/feed/oggcast",
+                    "https://librelounge.org/atom-feed.xml"
+            };
+            for (String urlString:urlStrings) {
+                Feed feed = new Feed();
+                feed.setUrl(urlString);
+                feed = dao.populateWithLatestRssEntry(feed);
+                System.out.println(Utils.toString(feed));
+            }
             System.exit(0);
         }
         if (false) {
@@ -168,6 +178,9 @@ public class FeedDAO {
             connection = Utils.getConnection();
             ps = connection.prepareStatement("update feed " +
                     "set url = ?, " +
+                    "channel_url = ?, " +
+                    "channel_title = ?, " +
+                    "channel_description = ?, " +
                     "label = ?, " +
                     "description = ?, " +
                     "media_url = ?, " +
@@ -178,6 +191,9 @@ public class FeedDAO {
                     "where id = ?");
             int i = 1;
             ps.setString(i++, feed.getUrl());
+            ps.setString(i++, feed.getChannelUrl());
+            ps.setString(i++, feed.getChannelTitle());
+            ps.setString(i++, feed.getChannelDescription());
             ps.setString(i++, feed.getLabel());
             ps.setString(i++, feed.getDescription());
             ps.setString(i++, feed.getMediaUrl());
@@ -194,6 +210,23 @@ public class FeedDAO {
             Utils.close(ps, rs, connection);
         }
         return feed;
+    }
+
+    public boolean delete(String label) {
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+            connection = Utils.getConnection();
+            ps = connection.prepareStatement("delete from feed where label = ?");
+            ps.setString(1, label);
+            int feedsDeleted = ps.executeUpdate();
+            return feedsDeleted == 1;
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            Utils.close(ps, connection);
+        }
+        return false;
     }
 
     public boolean delete(Feed feed) {
@@ -222,13 +255,47 @@ public class FeedDAO {
         return false;
     }
 
+    public Feed populateWithLatestRssEntryFails(Feed feed) {
+        SyndFeedInput syndFeedInput = new SyndFeedInput();
+        try {
+            XmlReader xmlReader = new XmlReader(new URL(feed.getUrl()));
+            SyndFeed syndFeed = syndFeedInput.build(xmlReader);
+            feed.setChannelTitle(syndFeed.getTitle());
+            feed.setChannelDescription(syndFeed.getDescription());
+            feed.setChannelUrl(syndFeed.getLink());
+        } catch (Exception e) {
+            System.out.format("Failed to parse: %s\n", feed.getUrl());
+            e.printStackTrace();
+        }
+        return feed;
+    }
 
     public Feed populateWithLatestRssEntry(Feed feed) {
         try {
+            org.jsoup.Connection.Response response = Jsoup.connect(feed.getUrl()).execute();
+            Document document = Jsoup.parse(response.body()).parser(Parser.xmlParser());
+            /*
             Document document = Jsoup.connect(feed.getUrl())
                     .parser(Parser.xmlParser())
                     .timeout(1000 * 5)
                     .get();
+
+             */
+            Element channelElement = document.getElementsByTag("channel").first();
+            if (channelElement!= null) {
+                feed.setChannelTitle(channelElement.getElementsByTag("title").first().text());
+                feed.setChannelDescription(channelElement.getElementsByTag("description").first().text());
+                feed.setChannelUrl(channelElement.getElementsByTag("link").first().text());
+            }
+            if (Utils.isBlank(feed.getChannelUrl())) {
+                Element linkElement = document.selectFirst("link");
+                if (linkElement!= null) {
+                    feed.setChannelUrl(linkElement.attr("href"));
+                }
+            }
+            if (Utils.isBlank(feed.getChannelTitle())) {
+                feed.setChannelTitle(document.selectFirst("title").text());
+            }
             Elements elements = document.getElementsByTag(Main.Literals.entry.name());
             if (elements.size() == 0) {
                 elements = document.getElementsByTag(Main.Literals.item.name());
@@ -244,7 +311,7 @@ public class FeedDAO {
                 html = html.replace("<![CDATA[", "");
                 html = html.replace("]]>", "");
                 String text = Jsoup.parse(html).text();
-        //        System.out.format("Node name: %s\ntext: %s\nhtml: %s\n", nodeName, text, html);
+                //        System.out.format("Node name: %s\ntext: %s\nhtml: %s\n", nodeName, text, html);
                 if (Main.Literals.title.name().equals(nodeName)) {
                     feed.setTitle(text);
                 }
@@ -288,11 +355,19 @@ public class FeedDAO {
                     }
                 }
             }
+            if (feed.getChannelDescription()!= null
+                    && feed.getChannelDescription().contains("Android Buffet")
+                    && "Oggcast".equals(feed.getChannelTitle())) {
+                feed.setChannelTitle("Android Buffet Podcast");
+            }
+            /*
             if (feed.getMediaUrl().contains("youtube.com")) {
                 feed.setUrl(feed.getMediaUrl());
                 feed.setMediaUrl(null);
             }
+             */
         } catch (IOException e) {
+            System.out.format("%s failed.\n", feed.getUrl());
             e.printStackTrace();
         }
         return feed;
@@ -358,6 +433,9 @@ public class FeedDAO {
         Timestamp timestamp = rs.getTimestamp("log_time");
         feed.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
         feed.setLogTimeMilliseconds(Utils.getLong(timestamp));
+        feed.setChannelDescription(rs.getString("channel_description"));
+        feed.setChannelTitle(rs.getString("channel_title"));
+        feed.setChannelUrl(rs.getString("channel_url"));
         feed.setFound(true);
         return feed;
     }
