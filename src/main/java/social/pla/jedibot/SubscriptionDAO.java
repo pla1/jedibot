@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 public class SubscriptionDAO {
     private final String SQL_CREATE_TABLE = "create table subscription (" +
-            "id int generated always as identity, " +
+            "id int generated always as identity (START WITH 1, INCREMENT BY 1), " +
             "user_name varchar(1024), " +
             "feed_id int, " +
             "log_time timestamp, " +
@@ -18,7 +18,7 @@ public class SubscriptionDAO {
 
     public static void main(String[] args) {
         SubscriptionDAO dao = new SubscriptionDAO();
-        if (true) {
+        if (false) {
             dao.createTable();
         }
         if (false) {
@@ -74,6 +74,25 @@ public class SubscriptionDAO {
             Utils.close(rs, ps, connection);
         }
         return subscription;
+    }
+
+    public String getDisplay(String accountName) {
+        FeedDAO feedDAO = new FeedDAO();
+        ArrayList<Feed> feeds = feedDAO.getFromUser(accountName);
+        if (feeds.isEmpty()) {
+            return String.format("%s isn't subscribed to any feeds. Try something like: subscribe xkcd", accountName);
+        } else {
+            StringBuilder sb = new StringBuilder();
+            sb.append("You are subscribed to: ");
+            String comma = "";
+            for (Feed f : feeds) {
+                sb.append(comma);
+                sb.append(f.getLabel());
+                comma = ", ";
+            }
+            sb.append(".");
+            return sb.toString();
+        }
     }
 
     public Subscription add(Feed feed, String user) {

@@ -1,6 +1,5 @@
 package social.pla.jedibot;
 
-import com.google.gson.JsonObject;
 
 import java.sql.*;
 
@@ -10,7 +9,7 @@ public class ApplicationDAO {
             "(application_id, client_id, client_secret, access_token, refresh_token, instance_name, user_name, create_time) " +
             "values(?,?,?,?,?,?,?,current_timestamp)";
     private final String SQL_CREATE_TABLE = "create table application (" +
-            "id int generated always as identity, " +
+            "id int generated always as identity (START WITH 1, INCREMENT BY 1), " +
             "application_id varchar(100), " +
             "client_id varchar(100), " +
             "client_secret varchar(100), " +

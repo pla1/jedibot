@@ -5,6 +5,7 @@ public class Feed {
     private String channelTitle;
     private String channelUrl;
     private String description;
+    private String feedUrl;
     private boolean found = false;
     private int id;
     private String label;
@@ -47,6 +48,14 @@ public class Feed {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getFeedUrl() {
+        return feedUrl;
+    }
+
+    public void setFeedUrl(String feedUrl) {
+        this.feedUrl = feedUrl;
     }
 
     public int getId() {
@@ -135,6 +144,10 @@ public class Feed {
 
     public void setFound(boolean found) {
         this.found = found;
+    }
+
+    public boolean isYouTube() {
+        return (url != null && url.contains("youtube.com"));
     }
 
     public String toString() {

@@ -62,6 +62,7 @@ public class Main {
         }
         System.out.format("Using instance: %s as %s\n", application.getInstanceName(), whoami());
         WorkerRssFeeds worker = new WorkerRssFeeds();
+        new Dump();
         long minutesRssFeedInterval = 30;
         long zeroInitialDelay = 0;
         ScheduledFuture scheduledFuture = scheduler.scheduleAtFixedRate(worker, zeroInitialDelay, minutesRssFeedInterval, TimeUnit.MINUTES);
@@ -284,6 +285,10 @@ public class Main {
                 System.out.format("Received quit request from PLA. %s\n", new Date());
                 System.exit(0);
             }
+            if ("dump".equalsIgnoreCase(text)) {
+                new Dump();
+                output = "See logs for details from dump.";
+            }
             int i = 0;
             if (words.length == 3 &&
                     words[i++].equals("delete") &&
@@ -316,27 +321,14 @@ public class Main {
             Feed feed = feedDAO.get(text);
             if (feed.isFound()) {
                 postMessage(feed, Utils.getProperty(statusJe, Literals.id.name()), null);
+                System.out.println(Utils.toString(feed));
                 return;
             }
             if (Literals.ping.name().equalsIgnoreCase(words[0])) {
                 output = "You need to provide an IP address or host name to ping. Example: ping 8.8.8.8";
             }
             if ("subscriptions".equals(text)) {
-                ArrayList<Feed> feeds = feedDAO.getFromUser(accountName);
-                if (feeds.isEmpty()) {
-                    output = String.format("%s isn't subscribed to any feeds. Try something like: subscribe xkcd", accountName);
-                } else {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("You are subscribed to: ");
-                    String comma = "";
-                    for (Feed f : feeds) {
-                        sb.append(comma);
-                        sb.append(f.getLabel());
-                        comma = ", ";
-                    }
-                    sb.append(".");
-                    output = sb.toString();
-                }
+                output = subscriptionDAO.getDisplay(accountName);
             }
         }
         if (words.length == 2) {
@@ -351,78 +343,10 @@ public class Main {
                 }
             }
             if ("subscribe".equalsIgnoreCase(words[0])) {
-                if ("all".equalsIgnoreCase(words[1])) {
-                    ArrayList<Feed> feeds = feedDAO.get();
-                    StringBuffer sb = new StringBuffer();
-                    int quantity = 0;
-                    int quantitySubscribed = 0;
-                    String comma = "";
-                    for (Feed feed : feeds) {
-                        Subscription subscription = subscriptionDAO.add(feed, accountName);
-                        if (subscription.isFound()) {
-                            sb.append(comma);
-                            sb.append(feed.getLabel());
-                            comma = ", ";
-                            quantitySubscribed++;
-                        }
-                        quantity++;
-                    }
-                    output = String.format("Subscribed to %d out of %d feeds. %s", quantitySubscribed, quantity, sb.toString());
-                } else {
-                    Feed feed = feedDAO.get(words[1]);
-                    if (feed.isFound()) {
-                        Subscription subscription = subscriptionDAO.get(feed, accountName);
-                        if (subscription.isFound()) {
-                            output = String.format("You are already subscribed to %s.", words[1]);
-                        } else {
-                            subscription = subscriptionDAO.add(feed, accountName);
-                            if (subscription.isFound()) {
-                                output = String.format("You are now subscribed to %s", words[1]);
-                            } else {
-                                output = String.format("Subscription to %s failed.", words[1]);
-                            }
-                        }
-                    } else {
-                        output = String.format("Feed with label: \"%s\" not found.", words[1]);
-                    }
-                }
+                output = subscribe(words, accountName);
             }
             if ("unsubscribe".equalsIgnoreCase(words[0])) {
-                if ("all".equalsIgnoreCase(words[1])) {
-                    ArrayList<Feed> feeds = feedDAO.get();
-                    StringBuffer sb = new StringBuffer();
-                    int quantity = 0;
-                    int quantityDeleted = 0;
-                    String comma = "";
-                    for (Feed feed : feeds) {
-                        boolean deleted = subscriptionDAO.delete(feed, accountName);
-                        if (deleted) {
-                            sb.append(comma);
-                            sb.append(feed.getLabel());
-                            comma = ", ";
-                            quantityDeleted++;
-                        }
-                        quantity++;
-                    }
-                    output = String.format("Unsubscribed from %d out of %d feeds. %s", quantityDeleted, quantity, sb.toString());
-                } else {
-                    Feed feed = feedDAO.get(words[1]);
-                    if (feed.isFound()) {
-                        Subscription subscription = subscriptionDAO.get(feed, accountName);
-                        if (!subscription.isFound()) {
-                            output = String.format("You are not subscribed to %s.", words[1]);
-                        } else {
-                            boolean deleted = subscriptionDAO.delete(feed, accountName);
-                            if (deleted) {
-                                output = String.format("You have been unsubscribed from %s.", words[1]);
-                            } else {
-                                output = String.format("Unsubscribed from %s failed.", words[1]);
-                            }
-                        }
-                    } else {
-                        output = String.format("Feed with label: \"%s\" not found.", words[1]);
-                    }
-                }
+                output = unsubscribe(words, accountName);
             }
         }
         if (Utils.isBlank(output)) {
@@ -430,7 +354,84 @@ public class Main {
         }
         postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), uploadedMediaIds);
     }
-
+    private String unsubscribe(String[] words, String accountName) {
+        String output;
+        if ("all".equalsIgnoreCase(words[1])) {
+            ArrayList<Feed> feeds = feedDAO.get();
+            StringBuffer sb = new StringBuffer();
+            int quantity = 0;
+            int quantityDeleted = 0;
+            String comma = "";
+            for (Feed feed : feeds) {
+                boolean deleted = subscriptionDAO.delete(feed, accountName);
+                if (deleted) {
+                    sb.append(comma);
+                    sb.append(feed.getLabel());
+                    comma = ", ";
+                    quantityDeleted++;
+                }
+                quantity++;
+            }
+            output = String.format("Unsubscribed from %d out of %d feeds. %s", quantityDeleted, quantity, sb.toString());
+        } else {
+            Feed feed = feedDAO.get(words[1]);
+            if (feed.isFound()) {
+                Subscription subscription = subscriptionDAO.get(feed, accountName);
+                if (!subscription.isFound()) {
+                    output = String.format("You are not subscribed to %s.", words[1]);
+                } else {
+                    boolean deleted = subscriptionDAO.delete(feed, accountName);
+                    if (deleted) {
+                        output = String.format("You have been unsubscribed from %s.", words[1]);
+                    } else {
+                        output = String.format("Unsubscribed from %s failed.", words[1]);
+                    }
+                }
+            } else {
+                output = String.format("Feed with label: \"%s\" not found.", words[1]);
+            }
+        }
+        return String.format("%s\n\n%s", output, subscriptionDAO.getDisplay(accountName));
+    }
+    private String subscribe(String[]words , String accountName) {
+        String output;
+        if ("all".equalsIgnoreCase(words[1])) {
+            ArrayList<Feed> feeds = feedDAO.get();
+            StringBuffer sb = new StringBuffer();
+            int quantity = 0;
+            int quantitySubscribed = 0;
+            String comma = "";
+            for (Feed feed : feeds) {
+                Subscription subscription = subscriptionDAO.add(feed, accountName);
+                if (subscription.isFound()) {
+                    sb.append(comma);
+                    sb.append(feed.getLabel());
+                    comma = ", ";
+                    quantitySubscribed++;
+                }
+                quantity++;
+            }
+            output = String.format("Subscribed to %d out of %d feeds. %s", quantitySubscribed, quantity, sb.toString());
+        } else {
+            Feed feed = feedDAO.get(words[1]);
+            if (feed.isFound()) {
+                Subscription subscription = subscriptionDAO.get(feed, accountName);
+                if (subscription.isFound()) {
+                    output = String.format("You are already subscribed to %s.", words[1]);
+                } else {
+                    subscription = subscriptionDAO.add(feed, accountName);
+                    if (subscription.isFound()) {
+                        output = String.format("You are now subscribed to %s", words[1]);
+                    } else {
+                        output = String.format("Subscription to %s failed.", words[1]);
+                    }
+                }
+            } else {
+                output = String.format("Feed with label: \"%s\" not found.", words[1]);
+            }
+        }
+        return String.format("%s\n\n%s", output, subscriptionDAO.getDisplay(accountName));
+    }
     private String help() {
         StringBuilder sb = new StringBuilder();
         sb.append("Commands you can send to this bot: help, ping, date, subscribe, unsubscribe, subscriptions, ");
@@ -452,20 +453,13 @@ public class Main {
 
     private void postMessage(Feed feed, String inReplyToId, String userName) {
         String text = "";
-        if (feed.getUrl().contains("youtube.com")) {
-            text = String.format("%s\n\n%s",
-                    feed.getTitle(),
-                    feed.getMediaUrl());
-        } else {
-            if (Utils.isNotBlank(feed.getChannelTitle())) {
-                text = String.format("%s\n\n", feed.getChannelTitle());
-            }
-            text = String.format("%s%s\n\n%s\n\n%s",
-                    text,
-                    feed.getTitle(),
-                    feed.getDescription(),
-                    feed.getUrl());
+        if (Utils.isNotBlank(feed.getChannelTitle())) {
+            text = feed.getChannelTitle();
         }
+        if (Utils.isNotBlank(feed.getDescription()) && !feed.isYouTube()) {
+            text = String.format("%s\n\n%s", text, feed.getDescription());
+        }
+        text = String.format("%s\n\n%s", text, feed.getUrl());
         if (Utils.isNotBlank(userName)) {
             text = String.format("%s %s", userName, text);
         }
