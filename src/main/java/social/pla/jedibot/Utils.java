@@ -164,7 +164,7 @@ public class Utils {
             int quantity = 0;
             while (rs.next()) {
                 for (int i = 1; i <= columnCount; i++) {
-                  System.out.format("%s\t", rs.getString(i));
+                    System.out.format("%s\t", rs.getString(i));
                 }
                 System.out.format("\n");
                 quantity++;
@@ -364,20 +364,27 @@ public class Utils {
         }
     }
 
-
-    public static Connection getConnection() throws SQLException, ClassNotFoundException {
+    public static Connection getConnection() {
         String fileName = "/etc/social.pla.jedibot.properties";
         Properties properties = new Properties();
+        Connection connection = null;
         try {
             properties.load(new FileReader(fileName));
         } catch (IOException e) {
             e.printStackTrace();
             System.out.format("Properties file not found: %s.\n", fileName);
-            return null;
+            System.exit(-1);
         }
-        Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
-        String url = String.format("jdbc:derby:%s", properties.getProperty("databaseName"));
-        return DriverManager.getConnection(url, properties);
+        try {
+            Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+            String url = String.format("jdbc:derby:%s", properties.getProperty("databaseName"));
+            connection = DriverManager.getConnection(url, properties);
+        } catch (ClassNotFoundException | SQLException e) {
+            e.printStackTrace();
+            System.out.format("%s\n",e.getLocalizedMessage());
+            System.exit(-1);
+        }
+        return connection;
     }
 
     public static void close(Object... objects) {
