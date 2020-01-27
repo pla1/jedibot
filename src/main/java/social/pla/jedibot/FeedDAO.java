@@ -37,7 +37,7 @@ public class FeedDAO {
     public static void main(String[] args) {
         FeedDAO dao = new FeedDAO();
         if (false) {
-            String sqlStatement = "delete from feed where id = 1201";
+            String sqlStatement = "update feed set type = 'feed' where type = 'rss'";
             boolean success = Utils.executeSqlStatement(sqlStatement);
             System.out.format("SQL statement \"%s\" executed sucessfully: %s\n", sqlStatement, success);
             System.exit(0);
@@ -280,7 +280,7 @@ public class FeedDAO {
             ps = connection.prepareStatement("select * from feed where label = ?");
             ps.setString(1, label);
             rs = ps.executeQuery();
-            while (rs.next()) {
+            if (rs.next()) {
                 return transfer(rs);
             }
         } catch (Exception e) {
@@ -300,7 +300,7 @@ public class FeedDAO {
             ps = connection.prepareStatement("select * from feed where id = ?");
             ps.setInt(1, id);
             rs = ps.executeQuery();
-            while (rs.next()) {
+            if (rs.next()) {
                 return transfer(rs);
             }
         } catch (Exception e) {
@@ -516,18 +516,18 @@ public class FeedDAO {
         feed.setFeedUrl(rs.getString("feed_url"));
         feed.setLabel(rs.getString(Main.Literals.label.name()));
         feed.setDescription(rs.getString(Main.Literals.description.name()));
-        feed.setUploadedMedialId(rs.getString("uploaded_media_id"));
-        feed.setUploadedMedialUrl(rs.getString("uploaded_media_url"));
-        feed.setMediaUrl(rs.getString("media_url"));
+        feed.setUploadedMedialId(rs.getString(Main.Literals.uploaded_media_id.name()));
+        feed.setUploadedMedialUrl(rs.getString(Main.Literals.uploaded_media_url.name()));
+        feed.setMediaUrl(rs.getString(Main.Literals.media_url.name()));
         feed.setTitle(rs.getString(Main.Literals.title.name()));
         feed.setUpdated(rs.getString(Main.Literals.updated.name()));
-        Timestamp timestamp = rs.getTimestamp("log_time");
+        Timestamp timestamp = rs.getTimestamp(Main.Literals.log_time.name());
         feed.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
         feed.setLogTimeMilliseconds(Utils.getLong(timestamp));
         feed.setChannelDescription(rs.getString("channel_description"));
         feed.setChannelTitle(rs.getString("channel_title"));
         feed.setChannelUrl(rs.getString("channel_url"));
-        feed.setType(rs.getString("type"));
+        feed.setType(rs.getString(Main.Literals.type.name()));
         feed.setFound(true);
         return feed;
     }

@@ -253,7 +253,7 @@ public class Main {
     }
 
     private void handleMessage(JsonElement jsonElement) {
-        if (jsonElement == null || !Utils.isJsonObject(jsonElement)) {
+        if (!Utils.isJsonObject(jsonElement)) {
             System.out.format("Message is blank.\n");
             return;
         }
@@ -292,7 +292,6 @@ public class Main {
                 new Dump();
                 output = "See logs for details from dump.";
             }
-            int i = 0;
             if (words.length == 3 &&
                     words[0].equals(Literals.delete.name()) &&
                     (words[1].equals("feed")
@@ -300,7 +299,6 @@ public class Main {
                 boolean deleted = feedDAO.delete(words[2]);
                 output = String.format("%s with label %s deleted %s", words[1], words[2], deleted);
             }
-            i = 0;
             if (words.length == 4 &&
                     words[0].equals(Literals.add.name()) &&
                     (words[1].equals(Literals.feed.name())
@@ -472,7 +470,7 @@ public class Main {
     }
 
     private void postMessage(Feed feed, String inReplyToId, String userName) {
-        String.format("Post message to user name: %s reply to ID: %s feed label: %s\n", userName, inReplyToId, feed.getLabel());
+        System.out.format("Post message to user name: %s reply to ID: %s feed label: %s\n", userName, inReplyToId, feed.getLabel());
         String text = "";
         if (Utils.isNotBlank(feed.getChannelTitle())) {
             text = feed.getChannelTitle();
@@ -496,6 +494,9 @@ public class Main {
             }
         }
         if (Utils.isNotBlank(userName)) {
+            if (!userName.startsWith("@")) {
+                userName = String.format("@%s", userName);
+            }
             text = String.format("%s %s", userName, text);
         }
         ArrayList<JsonElement> mediaList = new ArrayList<>();
@@ -534,7 +535,8 @@ public class Main {
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
         date, pla, ping, link, enclosure, pubDate, updated, summary, direct, label,
-        media_url, item, entry, rss, scrape, feed, add, all, delete
+        media_url, item, entry, feed, scrape, add, all, delete, uploaded_media_url,
+        uploaded_media_id, log_time, user_name, feed_id
     }
 
     class WorkerRssFeeds extends Thread {
@@ -546,18 +548,22 @@ public class Main {
             int quantityChanged = 0;
             for (Feed feed : feeds) {
                 String title = feed.getTitle();
-                if (Literals.rss.name().equals(feed.getType())) {
+                String description = feed.getDescription();
+                if (Literals.feed.name().equals(feed.getType())) {
                     feed = feedDAO.populateWithLatestRssEntry(feed);
                 } else {
                     feed = feedDAO.scrape(feed);
                 }
-                if (title == null || !title.equalsIgnoreCase(feed.getTitle())) {
+                if ((title == null || !title.equals(feed.getTitle()))
+                        || !Utils.equals(description, feed.getDescription())) {
                     if (Utils.isNotBlank(feed.getMediaUrl())) {
                         feed = feedDAO.uploadMedia(feed);
                     }
                     feed = feedDAO.update(feed);
                     ArrayList<Subscription> subscriptions = subscriptionDAO.getByFeedId(feed.getId());
+                    System.out.format("Title changed from %s to %s. %d subscriptions.\n", title, feed.getTitle(), subscriptions.size());
                     for (Subscription subscription : subscriptions) {
+                        System.out.format("Post message to %s for feed %s.\n", subscription.getUser(), feed.getLabel());
                         postMessage(feed, null, subscription.getUser());
                     }
                     quantityChanged++;

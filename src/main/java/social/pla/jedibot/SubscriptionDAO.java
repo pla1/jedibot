@@ -145,11 +145,11 @@ public class SubscriptionDAO {
 
     private Subscription transfer(ResultSet rs) throws SQLException {
         Subscription subscription = new Subscription();
-        subscription.setFeedId(rs.getInt("feed_id"));
+        subscription.setFeedId(rs.getInt(Main.Literals.feed_id.name()));
         subscription.setFound(true);
-        subscription.setId(rs.getInt("id"));
-        subscription.setUser(rs.getString("user_name"));
-        Timestamp timestamp = rs.getTimestamp("log_time");
+        subscription.setId(rs.getInt(Main.Literals.id.name()));
+        subscription.setUser(rs.getString(Main.Literals.user_name.name()));
+        Timestamp timestamp = rs.getTimestamp(Main.Literals.log_time.name());
         subscription.setLogTimeDisplay(Utils.getFullDateAndTime(timestamp));
         subscription.setLogTimeMilliseconds(Utils.getLong(timestamp));
         return subscription;

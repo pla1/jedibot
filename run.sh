@@ -12,11 +12,7 @@ fi
 derby="derby-10.15.1.3.jar'"
 jsoup="jsoup-1.12.1.jar"
 gson="gson-2.8.6.jar"
-if [ ! -f "$derby" ]
-then
-  echo "Downloading $derby."
-  wget 'https://repo1.maven.org/maven2/org/apache/derby/derby/10.15.1.3/derby-10.15.1.3.jar' --output-document="$derby"
-fi
+
 if [ ! -f "$jsoup" ]
 then
   echo "Downloading $jsoup."
@@ -27,6 +23,13 @@ then
   echo "Downloading $gson."
   wget 'https://repo1.maven.org/maven2/com/google/code/gson/gson/2.8.6/gson-2.8.6.jar' --output-document="$gson"
 fi
+if [ ! -f "$derby" ]
+then
+  echo "Downloading $derby."
+  wget 'https://repo1.maven.org/maven2/org/apache/derby/derby/10.15.1.3/derby-10.15.1.3.jar' --output-document="$derby"
+fi
+
+
 javac  -encoding UTF-8 -cp .:* src/main/java/social/pla/jedibot/*.java
 java -cp src/main/java:.:* social.pla.jedibot.Main
 
