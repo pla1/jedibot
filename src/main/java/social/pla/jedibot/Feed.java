@@ -13,6 +13,7 @@ public class Feed {
     private long logTimeMilliseconds;
     private String mediaUrl;
     private String title;
+    private String type;
     private String updated;
     private String uploadedMedialId;
     private String uploadedMedialUrl;
@@ -104,6 +105,14 @@ public class Feed {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     public String getUpdated() {

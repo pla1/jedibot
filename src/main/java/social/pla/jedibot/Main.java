@@ -10,6 +10,8 @@ import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -33,6 +35,7 @@ public class Main {
     private final SubscriptionDAO subscriptionDAO = new SubscriptionDAO();
     private final ApplicationDAO applicationDAO = new ApplicationDAO();
     private final String TAG = this.getClass().getCanonicalName();
+    private long pongTime = System.currentTimeMillis();
 
     public Main() {
         setup();
@@ -40,6 +43,10 @@ public class Main {
         while (webSocket != null && !webSocket.isInputClosed() && !webSocket.isOutputClosed()) {
             System.out.format("Web socket is open at %s\n", new Date());
             int sleepInterval = 30;
+            if (System.currentTimeMillis() - pongTime > Utils.MILLISECONDS_ONE_MINUTE) {
+                System.out.format("PONG not received since %s. Exiting.\n", new Date(pongTime));
+                System.exit(-1);
+            }
             Utils.sleep(sleepInterval);
         }
         System.out.format("Web socket died at %s.\n", new Date());
@@ -70,11 +77,12 @@ public class Main {
 
     private void setupWebsocket() {
         HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        String stream = "user";
         Application application = applicationDAO.get(1);
-        String urlString = String.format("wss://%s/api/v1/streaming/?stream=user&access_token=%s",
-                application.getInstanceName(), application.getAccessToken());
+        String urlString = String.format("wss://%s/api/v1/streaming/?stream=%s&access_token=%s",
+                application.getInstanceName(), stream, application.getAccessToken());
         System.out.format("Streaming URL: %s\n", urlString);
-        WebSocketListener webSocketListener = new WebSocketListener("user");
+        WebSocketListener webSocketListener = new WebSocketListener(stream);
         webSocket = client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(5)).buildAsync(URI.create(urlString), webSocketListener).join();
     }
 
@@ -181,16 +189,11 @@ public class Main {
     }
 
     private Logger getLogger() {
-        Logger logger = Logger.getLogger("JedibotJsonLog");
-        boolean debug = true;
-        if (!debug) {
-            LogManager.getLogManager().reset();
-            return logger;
-        }
+        Logger logger = Logger.getLogger("Jedibot");
         FileHandler fh;
         try {
-            jsonLoggerFile = File.createTempFile("jediverse_json_log_", ".log");
-            System.out.format("JSON log file: %s\n", jsonLoggerFile.getAbsolutePath());
+            jsonLoggerFile = File.createTempFile("jedibot_log_", ".log");
+            System.out.format("Log file: %s\n", jsonLoggerFile.getAbsolutePath());
             fh = new FileHandler(jsonLoggerFile.getAbsolutePath());
             logger.setUseParentHandlers(false);
             logger.addHandler(fh);
@@ -208,13 +211,13 @@ public class Main {
         HttpsURLConnection urlConnection;
         InputStream inputStream = null;
         OutputStream outputStream = null;
-        JsonObject jsonObject = null;
+        JsonObject jsonObject;
         Application application = applicationDAO.get(1);
         try {
             urlConnection = (HttpsURLConnection) url.openConnection();
             urlConnection.setRequestProperty("Cache-Control", "no-cache");
             urlConnection.setRequestProperty("Accept", "application/json");
-            urlConnection.setRequestProperty("User-Agent", "Jediverse CLI");
+            urlConnection.setRequestProperty("User-Agent", "Jedibot");
             urlConnection.setUseCaches(false);
             urlConnection.setRequestMethod(Literals.POST.name());
             String authorization = String.format("Bearer %s", application.getAccessToken());
@@ -291,28 +294,42 @@ public class Main {
             }
             int i = 0;
             if (words.length == 3 &&
-                    words[i++].equals("delete") &&
-                    words[i++].equals("feed")) {
-                boolean deleted = feedDAO.delete(words[i++]);
-                output = String.format("Feed with label %s deleted %s", words[2], deleted);
+                    words[0].equals(Literals.delete.name()) &&
+                    (words[1].equals("feed")
+                            || words[1].equals(Literals.scrape.name()))) {
+                boolean deleted = feedDAO.delete(words[2]);
+                output = String.format("%s with label %s deleted %s", words[1], words[2], deleted);
             }
             i = 0;
             if (words.length == 4 &&
-                    words[i++].equals("add") &&
-                    words[i++].equals("feed")) {
-                String urlString = words[i++];
-                String label = words[i++];
-                if (!urlString.startsWith("http")) {
-                    output = String.format("%s should start with http. %s - Example: add feed https://xkcd.com/atom.xml xkcd", urlString, Utils.SYMBOL_THINKING);
+                    words[0].equals(Literals.add.name()) &&
+                    (words[1].equals(Literals.feed.name())
+                            || words[1].equals(Literals.scrape.name()))) {
+                String urlString = words[2];
+                String label = words[3];
+                if (words[1].equals(Literals.scrape.name())
+                        && !"https://www.smithsonianmag.com/photocontest/photo-of-the-day/".equals(urlString)) {
+                    output = String.format("Custom scrape method not defined for URL: %s\n", urlString);
                 } else {
-                    Feed feed = feedDAO.get(urlString, label);
-                    if (feed.isFound()) {
-                        output = String.format("Feed already exists with URL: %s and label: %s.", urlString, label);
+                    if (!urlString.startsWith("http")) {
+                        output = String.format("%s should start with http. %s - Example: add feed https://xkcd.com/atom.xml xkcd", urlString, Utils.SYMBOL_THINKING);
                     } else {
-                        feed = feedDAO.add(urlString, label);
-                        output = String.format("Feed added to table: %s. Will update the feed next.", feed.isFound());
-                        WorkerRssFeeds worker = new WorkerRssFeeds();
-                        worker.start();
+                        Feed feed = feedDAO.get(urlString, label);
+                        if (feed.isFound()) {
+                            output = String.format("Feed already exists with URL: %s and label: %s.", urlString, label);
+                        } else {
+                            feed = feedDAO.add(urlString, label, words[1]);
+                            System.out.format("Feed added to table: %s. Will update the feed and send message to @pla", feed.isFound());
+                            if (Literals.scrape.name().equals(words[1])) {
+                                feed = feedDAO.scrape(feed);
+                            } else {
+                                feed = feedDAO.populateWithLatestRssEntry(feed);
+                            }
+                            feed = feedDAO.uploadMedia(feed);
+                            feed = feedDAO.update(feed);
+                            postMessage(feed, null, "@pla");
+                            return;
+                        }
                     }
                 }
             }
@@ -354,11 +371,12 @@ public class Main {
         }
         postStatus(output, Utils.getProperty(statusJe, Literals.id.name()), uploadedMediaIds);
     }
+
     private String unsubscribe(String[] words, String accountName) {
         String output;
-        if ("all".equalsIgnoreCase(words[1])) {
+        if (Literals.all.name().equalsIgnoreCase(words[1])) {
             ArrayList<Feed> feeds = feedDAO.get();
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             int quantity = 0;
             int quantityDeleted = 0;
             String comma = "";
@@ -393,11 +411,12 @@ public class Main {
         }
         return String.format("%s\n\n%s", output, subscriptionDAO.getDisplay(accountName));
     }
-    private String subscribe(String[]words , String accountName) {
+
+    private String subscribe(String[] words, String accountName) {
         String output;
-        if ("all".equalsIgnoreCase(words[1])) {
+        if (Literals.all.name().equalsIgnoreCase(words[1])) {
             ArrayList<Feed> feeds = feedDAO.get();
-            StringBuffer sb = new StringBuffer();
+            StringBuilder sb = new StringBuilder();
             int quantity = 0;
             int quantitySubscribed = 0;
             String comma = "";
@@ -432,6 +451,7 @@ public class Main {
         }
         return String.format("%s\n\n%s", output, subscriptionDAO.getDisplay(accountName));
     }
+
     private String help() {
         StringBuilder sb = new StringBuilder();
         sb.append("Commands you can send to this bot: help, ping, date, subscribe, unsubscribe, subscriptions, ");
@@ -452,14 +472,29 @@ public class Main {
     }
 
     private void postMessage(Feed feed, String inReplyToId, String userName) {
+        String.format("Post message to user name: %s reply to ID: %s feed label: %s\n", userName, inReplyToId, feed.getLabel());
         String text = "";
         if (Utils.isNotBlank(feed.getChannelTitle())) {
             text = feed.getChannelTitle();
+        } else {
+            if (Utils.isNotBlank(feed.getTitle())) {
+                text = feed.getTitle();
+            }
         }
         if (Utils.isNotBlank(feed.getDescription()) && !feed.isYouTube()) {
             text = String.format("%s\n\n%s", text, feed.getDescription());
         }
-        text = String.format("%s\n\n%s", text, feed.getUrl());
+        if (feed.isYouTube()) {
+            text = String.format("%s\n\n%s", text, feed.getUrl());
+        } else {
+            if (Utils.isNotBlank(feed.getUrl())) {
+                text = String.format("%s\n\n%s", text, feed.getUrl());
+            } else {
+                if (Utils.isNotBlank(feed.getChannelUrl())) {
+                    text = String.format("%s\n\n%s", text, feed.getChannelUrl());
+                }
+            }
+        }
         if (Utils.isNotBlank(userName)) {
             text = String.format("%s %s", userName, text);
         }
@@ -498,9 +533,8 @@ public class Main {
         redirect_uri, redirect_uris, client_id, client_secret, code, content, type, status,
         url, notification, event, payload, acct, POST, mention, help, quit, username,
         visibility, title, media_ids, file, description, authorization_code, account,
-        date, pla, ping, link, enclosure, nasaImageOfTheDay, nasa, pubDate, hpr,
-        hprLatestEpisode, updated, summary, xkcd, direct, label,
-        item, entry
+        date, pla, ping, link, enclosure, pubDate, updated, summary, direct, label,
+        media_url, item, entry, rss, scrape, feed, add, all, delete
     }
 
     class WorkerRssFeeds extends Thread {
@@ -512,16 +546,21 @@ public class Main {
             int quantityChanged = 0;
             for (Feed feed : feeds) {
                 String title = feed.getTitle();
-                feed = feedDAO.populateWithLatestRssEntry(feed);
+                if (Literals.rss.name().equals(feed.getType())) {
+                    feed = feedDAO.populateWithLatestRssEntry(feed);
+                } else {
+                    feed = feedDAO.scrape(feed);
+                }
                 if (title == null || !title.equalsIgnoreCase(feed.getTitle())) {
                     if (Utils.isNotBlank(feed.getMediaUrl())) {
                         feed = feedDAO.uploadMedia(feed);
                     }
                     feed = feedDAO.update(feed);
-                    String userName = "@pla";
-                    postMessage(feed, null, userName);
+                    ArrayList<Subscription> subscriptions = subscriptionDAO.getByFeedId(feed.getId());
+                    for (Subscription subscription : subscriptions) {
+                        postMessage(feed, null, subscription.getUser());
+                    }
                     quantityChanged++;
-                    // TODO in the future we'll do subscription notifications here.
                 }
             }
             System.out.format("%s running at %s. %d out of  %d feeds changed.\n",
@@ -533,6 +572,23 @@ public class Main {
         private final String stream;
         private StringBuilder sb = new StringBuilder();
 
+        class Pinger extends Thread {
+            WebSocket webSocket;
+
+            Pinger(WebSocket webSocket) {
+                this.webSocket = webSocket;
+            }
+
+            @Override
+            public void run() {
+                while (true) {
+                    webSocket.sendPing(ByteBuffer.wrap("PING".getBytes()));
+                    System.out.format("Ping at %s.\n", new Date());
+                    Utils.sleep(30);
+                }
+            }
+        }
+
         WebSocketListener(String stream) {
             this.stream = stream;
         }
@@ -541,10 +597,10 @@ public class Main {
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             if (last) {
                 sb.append(data);
-                System.out.format("Web socket mesage: \"%s\".\n", sb.toString());
                 if (sb.toString().trim().length() == 0) {
                     System.out.format("Websocket message is blank. %s\n", new Date());
                 } else {
+                    System.out.format("Web socket message: \"%s\".\n", sb.toString());
                     JsonElement messageJsonElement = JsonParser.parseString(sb.toString());
                     Gson gson = new GsonBuilder().setPrettyPrinting().create();
                     logger.info(gson.toJson(messageJsonElement));
@@ -574,20 +630,24 @@ public class Main {
 
         @Override
         public CompletionStage<?> onPing(WebSocket webSocket, ByteBuffer message) {
-            //     System.out.format("onPing Message: %s\n", message);
+            System.out.format("onPing Message: %s\n", message);
             return WebSocket.Listener.super.onPing(webSocket, message);
         }
 
         @Override
-        public CompletionStage<?> onPong(WebSocket webSocket, ByteBuffer message) {
-            System.out.format("onPong Message: %s\n", message);
-            return WebSocket.Listener.super.onPong(webSocket, message);
+        public CompletionStage<?> onPong(WebSocket webSocket, ByteBuffer byteBuffer) {
+            String message = new String(byteBuffer.array(), StandardCharsets.UTF_8);
+            System.out.format("onPong Message: %s at %s.\n", message, new Date());
+            pongTime = System.currentTimeMillis();
+            return WebSocket.Listener.super.onPong(webSocket, byteBuffer);
         }
 
         @Override
         public void onOpen(WebSocket webSocket) {
             System.out.format("WebSocket opened for %s stream.\n", stream);
             WebSocket.Listener.super.onOpen(webSocket);
+            Pinger pinger = new Pinger(webSocket);
+            pinger.start();
         }
 
         @Override

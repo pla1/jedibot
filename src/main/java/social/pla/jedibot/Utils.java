@@ -30,6 +30,8 @@ public class Utils {
     public static final String SYMBOL_THINKING = "\uD83E\uDD14";
     public static final String SYMBOL_THUMBSUP = "\uD83D\uDC4D";
     public static final String SYMBOL_THUMBSDOWN = "\uD83D\uDC4E";
+    public static final long MILLISECONDS_ONE_MINUTE = 1000 * 60;
+    public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36";
 
 
     public static void main(String[] args) throws Exception {
@@ -84,22 +86,7 @@ public class Utils {
         return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
     }
 
-    public static File downloadImage(String urlString) {
-        System.out.format("Download: %s\n", urlString);
-        try {
-            URL url = getRedirect(new URL(urlString));
-            BufferedImage image = ImageIO.read(url);
-            File outputFile = File.createTempFile(Main.Literals.nasaImageOfTheDay.name(), ".jpg");
-            ImageIO.write(image, "jpg", outputFile);
-            return outputFile;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
-
     public static String getFullDateAndTime(Timestamp timestamp) {
-        java.util.Date date = (java.util.Date) timestamp;
         SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd, yyyy hh:mm:ss a");
         return sdf.format(timestamp);
     }
@@ -125,7 +112,7 @@ public class Utils {
     }
 
     public static URL getRedirect(URL url) throws IOException {
-        HttpURLConnection connection = null;
+        HttpURLConnection connection;
         String location = url.toString();
         for (; ; ) {
             url = new URL(location);
@@ -160,7 +147,7 @@ public class Utils {
     }
 
     public static void printTable(String tableName) {
-        Connection connection = null;
+        Connection connection;
         Statement statement = null;
         ResultSet rs;
         try {
@@ -190,10 +177,28 @@ public class Utils {
         }
     }
 
+    public static boolean executeSqlStatement(String sqlStatement) {
+        System.out.format("Execute SQL statement: %s\n", sqlStatement);
+        Connection connection;
+        Statement statement = null;
+        ResultSet rs;
+        try {
+            connection = Utils.getConnection();
+            statement = connection.createStatement();
+            return statement.execute(sqlStatement);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            Utils.close(statement);
+        }
+        return false;
+    }
+
     public static String listZoneIds() {
         StringBuilder sb = new StringBuilder();
         Set<String> list = ZoneRulesProvider.getAvailableZoneIds();
-        ArrayList<String> zoneIDs = new ArrayList<String>(list);
+        ArrayList<String> zoneIDs = new ArrayList<>(list);
         Collections.sort(zoneIDs);
         sb.append(String.format("%d zone IDs\n", list.size()));
         for (String zoneId : zoneIDs) {
@@ -238,7 +243,7 @@ public class Utils {
             HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
             urlConnection.setInstanceFollowRedirects(true);
             InputStream inputStream = urlConnection.getInputStream();
-            File outputFile = File.createTempFile(Main.Literals.hprLatestEpisode.name(), ".mp3");
+            File outputFile = File.createTempFile("social.pla.media_", ".mp3");
             outputStream = new FileOutputStream(outputFile);
             byte[] buffer = new byte[4096];
             int length;
@@ -255,7 +260,7 @@ public class Utils {
     }
 
     private static HttpRequest.BodyPublisher ofMimeMultipartData(Map<Object, Object> data, String boundary) throws IOException {
-        ArrayList<byte[]> byteArrays = new ArrayList<byte[]>();
+        ArrayList<byte[]> byteArrays = new ArrayList<>();
         byte[] separator = ("--" + boundary + "\r\nContent-Disposition: form-data; name=")
                 .getBytes(StandardCharsets.UTF_8);
         for (Map.Entry<Object, Object> entry : data.entrySet()) {
@@ -297,8 +302,8 @@ public class Utils {
         data.put(Main.Literals.description.name(), String.format("%s uploaded by JediBot.", file.getAbsolutePath()));
         data.put(Main.Literals.file.name(), Paths.get(file.getAbsolutePath()));
         String boundary = new BigInteger(256, new Random()).toString();
-        HttpRequest request = null;
-        HttpResponse<String> response = null;
+        HttpRequest request;
+        HttpResponse<String> response;
         try {
             request = HttpRequest.newBuilder()
                     .header("Content-Type", "multipart/form-data;boundary=" + boundary)
@@ -577,7 +582,7 @@ public class Utils {
             bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
             while ((line = bufferedReader.readLine()) != null) {
-                if (line.indexOf("received, 0% packet loss") != -1) {
+                if (line.contains("received, 0% packet loss")) {
                     success = true;
                 }
                 output.append(line).append("\n");
@@ -602,13 +607,12 @@ public class Utils {
         for (int i = 0; i < methods.length; i++) {
             String methodName = methods[i].getName();
             if (methodName.startsWith("get") || methodName.startsWith("is")) {
-                String label = methodName;
                 String value = null;
                 try {
                     value = methods[i].invoke(object).toString();
                 } catch (Exception e) {
                 }
-                arrayList.add(new Pair(label, value));
+                arrayList.add(new Pair(methodName, value));
             }
         }
         Collections.sort(arrayList);
