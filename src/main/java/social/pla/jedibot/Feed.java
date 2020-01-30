@@ -160,6 +160,6 @@ public class Feed {
     }
 
     public String toString() {
-        return String.format("%d %s %s %s %s %s %s %s", id, label, url, title, mediaUrl, uploadedMedialId, uploadedMedialUrl, description);
+        return String.format("Feed ID: %d label: %s title: %s URL: %s media URL: %s upload media ID: %s uploaded media URL: %s description: %s", id, label,title , url, mediaUrl, uploadedMedialId, uploadedMedialUrl, description);
     }
 }

@@ -1,6 +1,10 @@
 package social.pla.jedibot;
 
 import com.google.gson.JsonObject;
+import com.rometools.rome.feed.synd.SyndEntry;
+import com.rometools.rome.feed.synd.SyndFeed;
+import com.rometools.rome.io.SyndFeedInput;
+import com.rometools.rome.io.XmlReader;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -9,8 +13,10 @@ import org.jsoup.select.Elements;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +42,21 @@ public class FeedDAO {
 
     public static void main(String[] args) {
         FeedDAO dao = new FeedDAO();
+        if (true) {
+            ArrayList<Feed> list = dao.get();
+            for (Feed feed : list) {
+                if (Main.Literals.feed.name().equals(feed.getType())) {
+                    String feedUrl = feed.getFeedUrl();
+                    feed = new Feed();
+                    feed.setFeedUrl(feedUrl);
+                    System.out.format("%s\n", feed);
+                    feed = dao.populateWithRome(feed);
+                    System.out.println(Utils.toString(feed));
+                }
+            }
+            System.out.format("%d feeds.\n", list.size());
+            System.exit(0);
+        }
         if (false) {
             String sqlStatement = "update feed set type = 'feed' where type = 'rss'";
             boolean success = Utils.executeSqlStatement(sqlStatement);
@@ -56,8 +77,14 @@ public class FeedDAO {
             System.out.println(Utils.toString(feed));
             System.exit(0);
         }
+        if (false) {
+            Feed feed = dao.get("Space.com");
+            feed = dao.populateWithLatestRssEntry(feed);
+            System.out.println(Utils.toString(feed));
+            System.exit(0);
+        }
         if (true) {
-            Feed feed = dao.get("apod");
+            Feed feed = dao.get("LibreLounge");
             feed = dao.populateWithLatestRssEntry(feed);
             System.out.println(Utils.toString(feed));
             System.exit(0);
@@ -66,6 +93,7 @@ public class FeedDAO {
             Feed feed = dao.get("LibreLounge");
             boolean deleted = dao.delete(feed);
             System.out.format("%s deleted %s\n", feed.getLabel(), deleted);
+            System.out.println(Utils.toString(feed));
             System.exit(0);
         }
         if (false) {
@@ -159,7 +187,7 @@ public class FeedDAO {
             ps.executeUpdate();
             rs = ps.getGeneratedKeys();
             if (rs.next()) {
-                int id  = rs.getInt(1);
+                int id = rs.getInt(1);
                 return get(id);
             }
         } catch (Exception e) {
@@ -368,15 +396,41 @@ public class FeedDAO {
     public Feed scrape(Feed feed) {
         System.out.format("Scrape URL: %s\n", feed.getUrl());
         if ("https://www.smithsonianmag.com/photocontest/photo-of-the-day/".equals(feed.getUrl())) {
-           feed = scrapeSmithsonian(feed);
+            feed = scrapeSmithsonian(feed);
         } else {
             System.out.format("Custom scrape method not defined for URL: %s\n", feed.getUrl());
         }
         return feed;
     }
+    public Feed populateWithRome(Feed feed) {
+        try {
+            URL feedUrl = new URL(feed.getFeedUrl());
+            SyndFeedInput input = new SyndFeedInput();
+            SyndFeed syndFeed = input.build(new XmlReader(feedUrl));
+            feed.setChannelUrl(syndFeed.getLink());
+            feed.setChannelTitle(syndFeed.getTitle());
+            feed.setChannelDescription(syndFeed.getDescription());
+            List<SyndEntry> entries = syndFeed.getEntries();
+            if (entries.size() > 0) {
+                SyndEntry entry = entries.get(0);
+                feed.setUrl(entry.getLink());
+                feed.setDescription(entry.getDescription().getValue());
+                feed.setTitle(entry.getTitle());
+                feed.setMediaUrl(entry.getUri());
+            } else {
+                System.out.format("No entries for %s\n", feed);
+            }
+           // System.out.println(syndFeed);
+        }
+        catch (Exception ex) {
+            System.out.format("%s %s \n", ex.getLocalizedMessage(), feed);
+        }
+         return feed;
+    }
 
     public Feed populateWithLatestRssEntry(Feed feed) {
         System.out.format("Populate feed %s\n", feed.getFeedUrl());
+        feed.setUrl(null); // Doing this for Space.com. Lets see what problems it causes.
         try {
             org.jsoup.Connection.Response response = Jsoup.connect(feed.getFeedUrl()).execute();
             Document document = Jsoup.parse(response.body()).parser(Parser.xmlParser());
@@ -450,7 +504,7 @@ public class FeedDAO {
                 }
                 if (Main.Literals.link.name().equals(nodeName)) {
                     if (child.hasAttr("href")) {
-                        String link = child.attr("href");
+                        String link = child.attr("abs:href");
                         feed.setMediaUrl(link);
                     }
                     if (child.hasAttr("rel")) {
@@ -463,9 +517,15 @@ public class FeedDAO {
                         }
                     }
                     if (Utils.isBlank(feed.getUrl())) {
-                        String linkContents = child.select("link").first().nextSibling().toString();
-                        if (linkContents != null && linkContents.startsWith("http")) {
-                            feed.setUrl(linkContents);
+                        Element link = child.select("link").first();
+                        if (link != null) {
+                            Element nextSibling = link.nextElementSibling();
+                            if (nextSibling!= null) {
+                                String linkContents = nextSibling.toString();
+                                if (linkContents != null && linkContents.startsWith("http")) {
+                                    feed.setUrl(linkContents);
+                                }
+                            }
                         }
                     }
                 }

@@ -282,6 +282,11 @@ public class Main {
         if (Literals.help.name().equalsIgnoreCase(text)) {
             output = help();
         }
+        if (Literals.refresh.name().equalsIgnoreCase(text)) {
+            WorkerRssFeeds workerRssFeeds = new WorkerRssFeeds();
+            workerRssFeeds.start();
+            output = String.format("Refreshing feeds and scrapes. %s", new Date());
+        }
         String[] words = text.split("\\s+");
         if (Literals.pla.name().equalsIgnoreCase(accountName)) {
             if (text.equalsIgnoreCase(Literals.quit.name())) {
@@ -536,7 +541,7 @@ public class Main {
         visibility, title, media_ids, file, description, authorization_code, account,
         date, pla, ping, link, enclosure, pubDate, updated, summary, direct, label,
         media_url, item, entry, feed, scrape, add, all, delete, uploaded_media_url,
-        uploaded_media_id, log_time, user_name, feed_id
+        uploaded_media_id, log_time, user_name, feed_id, refresh
     }
 
     class WorkerRssFeeds extends Thread {
@@ -547,6 +552,7 @@ public class Main {
             System.out.format("%s running at %s. %d feeds to check.\n", TAG, new Date(), feeds.size());
             int quantityChanged = 0;
             for (Feed feed : feeds) {
+                System.out.format("Refreshing %s\n", feed.toString());
                 String title = feed.getTitle();
                 String description = feed.getDescription();
                 if (Literals.feed.name().equals(feed.getType())) {

@@ -14,6 +14,7 @@ https://repo1.maven.org/maven2/com/google/code/gson/gson/2.8.6/gson-2.8.6.jar \
 https://repo1.maven.org/maven2/org/apache/derby/derbyclient/10.15.1.3/derbyclient-10.15.1.3.jar \
 https://repo1.maven.org/maven2/org/apache/derby/derbytools/10.15.1.3/derbytools-10.15.1.3.jar \
 https://repo1.maven.org/maven2/org/apache/derby/derbyshared/10.15.1.3/derbyshared-10.15.1.3.jar \
+https://repo1.maven.org/maven2/com/rometools/rome/1.12.2/rome-1.12.2.jar \
 https://repo1.maven.org/maven2/org/apache/derby/derby/10.15.1.3/derby-10.15.1.3.jar"
 for url in $urls
 do
